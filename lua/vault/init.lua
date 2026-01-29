@@ -85,6 +85,10 @@ local function setup_highlight_groups()
   -- DB tree config
   api.nvim_set_hl(0, 'ExplorerLineActive', { fg = '#F1FA8C', bg = '#44475A', bold = true }) -- Active line text color
   api.nvim_set_hl(0, 'ExplorerLineInactive', { fg = '#BD93F9', bg = 'NONE' }) -- Inactive line text color
+  -- Define soft red for labels
+  api.nvim_set_hl(0, "SoftRedLabel", { fg = "#e06c75" }) 
+  -- Define soft orange for keys/actions
+  api.nvim_set_hl(0, "SoftOrangeKey", { fg = "#d19a66" })
 end
 
 -- 2. Autocomplete Engine Logic
@@ -320,6 +324,7 @@ local function render_explorer_tree(buf)
 
   -- Finally, update the Neovim buffer
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
 -- Update your M.toggle_node function definition elsewhere in your script
@@ -507,7 +512,28 @@ local function update_ui_state()
         end
 
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
-        api.nvim_buf_set_lines(b_buf, 1, 2, false, { 'Connect: <enter> | New: n | Edit: e | Delete: e | Refresh: f | Close: <esc> (in normal mode)' })
+        --api.nvim_buf_set_lines(b_buf, 1, 2, false, { 'Connect: <enter> | New: n | Edit: e | Delete: d | Refresh: f | Close: <esc> (in normal mode)' })
+
+        -- 1. Get window width
+        local win_width = api.nvim_win_get_width(b_win) - 2
+    
+        -- 2. Your existing text
+        local left_text = "Connect: <enter> | New: n | Edit: e | Delete: d | Refresh: f | Close: <esc> (in normal mode)"
+        local right_text = "Help: ? | Leader: <space>"
+    
+        -- 3. Calculate spaces needed
+        -- We subtract 1 or 2 to account for the sign column/edge
+        local space_count = win_width - #left_text - #right_text - 1
+    
+        if space_count > 0 then
+            local full_line = left_text .. string.rep(" ", space_count) .. right_text
+            -- 4. Set the line
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { full_line })
+        else
+            -- If window is too small, just put one space
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. " " .. right_text })
+        end
+
       end
     else
       api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1) -- comment this line if you want to dimm the text when inactive
@@ -528,7 +554,28 @@ local function update_ui_state()
 
         local mode_text = is_insert and ' INSERT ' or ' NORMAL '
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { mode_text .. connection_status })
-        api.nvim_buf_set_lines(b_buf, 1, 2, false, { 'Insert Mode: i | Normal Mode: <esc> | Execute: <enter> | History: h | Close: <esc> (in normal mode)' })
+        --api.nvim_buf_set_lines(b_buf, 1, 2, false, { 'Insert Mode: i | Normal Mode: <esc> | Execute: <enter> | History: h | Close: <esc> (in normal mode)' })
+
+        -- 1. Get window width
+        local win_width = api.nvim_win_get_width(b_win) - 2
+    
+        -- 2. Your existing text
+        local left_text = "Insert Mode: i | Normal Mode: <esc> | Execute: <enter> | History: h | Close: <esc> (in normal mode)"
+        local right_text = "Help: ? | Leader: <space>"
+    
+        -- 3. Calculate spaces needed
+        -- We subtract 1 or 2 to account for the sign column/edge
+        local space_count = win_width - #left_text - #right_text - 1
+    
+        if space_count > 0 then
+            local full_line = left_text .. string.rep(" ", space_count) .. right_text
+            -- 4. Set the line
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { full_line })
+        else
+            -- If window is too small, just put one space
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. " " .. right_text })
+        end
+
         api.nvim_buf_add_highlight(b_buf, -1, (is_insert and state.hl_mode_insert or state.hl_mode_normal), 0, 0, #mode_text)
       end
     else
@@ -549,6 +596,26 @@ local function update_ui_state()
         end
 
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
+
+        -- 1. Get window width
+        local win_width = api.nvim_win_get_width(b_win) - 2
+    
+        -- 2. Your existing text
+        local left_text = "Close: <esc> (in normal mode)"
+        local right_text = "Help: ? | Leader: <space>"
+    
+        -- 3. Calculate spaces needed
+        -- We subtract 1 or 2 to account for the sign column/edge
+        local space_count = win_width - #left_text - #right_text - 1
+    
+        if space_count > 0 then
+            local full_line = left_text .. string.rep(" ", space_count) .. right_text
+            -- 4. Set the line
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { full_line })
+        else
+            -- If window is too small, just put one space
+            api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. " " .. right_text })
+        end
       end
 
       -- api.nvim_win_set_option(r_ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
@@ -561,6 +628,37 @@ local function update_ui_state()
   if ovr_scroll_buf and ovr_win then
     api.nvim_buf_set_lines(ovr_scroll_buf, 0, -1, false, { get_h_scroll_indicator(ovr_win) })
   end
+
+  -- bottom buffer text highlighting
+  local ns = api.nvim_create_namespace("my_dynamic_highlights")
+    
+  -- Clear previous highlights in this namespace
+  api.nvim_buf_clear_namespace(b_buf, ns, 0, -1)
+
+  local lines = api.nvim_buf_get_lines(b_buf, 0, -1, false)
+  for i, line in ipairs(lines) do
+      local line_idx = i - 1
+
+      -- Patterns to match: Label (Soft Red)
+      local labels = { "Connect:", "New:", "Edit:", "Leader:", "Refresh:", "Help:", "Delete:", "Execute:", "History:", "Close:", "Insert Mode:", "Normal Mode:" }
+      for _, word in ipairs(labels) do
+          local s, e = line:find(word)
+          if s then
+              api.nvim_buf_add_highlight(b_buf, ns, "SoftRedLabel", line_idx, s-1, e)
+          end
+      end
+
+      -- Patterns to match: Keys (Soft Orange)
+      -- Uses lua patterns to find <...> or single letters after a colon
+      local orange_patterns = { "<enter>", " n ", "<space>", "?", " e ", " f ", " d ", " i ", " h ", "<esc>" }
+      for _, pat in ipairs(orange_patterns) do
+          local s, e = line:find(pat)
+          if s then
+              -- Adjust start/end if you included spaces in the pattern to match precisely
+              api.nvim_buf_add_highlight(b_buf, ns, "SoftOrangeKey", line_idx, s-1, e)
+          end
+      end
+    end
 end
 
 M.close_all_windows = function()
