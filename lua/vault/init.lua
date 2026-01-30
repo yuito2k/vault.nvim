@@ -313,9 +313,9 @@ local function render_explorer_tree(buf)
     ['Triggers'] = { name = 'Triggers', type = 'folder', children = {} },
     ['users'] = { name = 'users', type = 'table', children = { 'name TEXT', 'email TEXT', 'joined_at INTEGER' } },
     -- ADDED KEYS AND COMMAS BELOW = {name = 'name TEXT', type = 'field'}, = {name = 'email TEXT', type = 'field'},
-    ['name TEXT'] = { name = 'name TEXT', type = 'field' },
-    ['email TEXT'] = { name = 'email TEXT', type = 'field' },
-    ['joined_at INTEGER'] = { name = 'joined_at INTEGER', type = 'field' },
+    ['name'] = { name = 'name TEXT', type = 'field' },
+    ['email'] = { name = 'email TEXT', type = 'field' },
+    ['joined_at'] = { name = 'joined_at INTEGER', type = 'field' },
   }
 
   -- THE RECURSIVE DRAW LOGIC
@@ -751,6 +751,22 @@ local function switch_to_win(target)
 end
 
 M.open_db_float = function()
+  local sqlite3 = require('sqlite')
+
+  if not sqlite or not sqlite.db then
+    print("Error: sqlite module not loaded correctly!")
+    return -- Stop execution if the module is nil
+  end
+
+  local db_filename = '/home/yuito/.config/nvim/database.db' -- Replace with your database file path
+  local db = sqlite3.db:open(db_filename)
+
+  local tables_and_views = db:eval([[
+    SELECT * FROM users;
+  ]])
+
+  print(tables_and_views)
+
   setup_highlight_groups()
   local ui = api.nvim_list_uis()[1]
   local w, h = math.floor(ui.width * 1), math.floor(ui.height * 0.9)
