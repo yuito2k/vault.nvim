@@ -283,6 +283,8 @@ local function render_explorer_tree(buf)
     ['Triggers'] = { name = 'Triggers', type = 'folder', children = {} },
     ['users'] = { name = 'users', type = 'table', children = { 'name TEXT', 'email TEXT', 'joined_at INTEGER' } },
     -- ADDED KEYS AND COMMAS BELOW = {name = 'name TEXT', type = 'field'}, = {name = 'email TEXT', type = 'field'},
+    ['name TEXT'] = { name = 'name TEXT', type = 'field' },
+    ['email TEXT'] = { name = 'email TEXT', type = 'field' },
     ['joined_at INTEGER'] = { name = 'joined_at INTEGER', type = 'field' },
   }
 
