@@ -234,6 +234,7 @@ local function render_results_table(buf, data)
     table.insert(row_lines, line)
   end
 
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
   api.nvim_buf_set_option(buf, 'modifiable', true)
   api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
   api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
@@ -257,6 +258,7 @@ end
 
 local function render_explorer_tree(buf)
   local lines = {}
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
   api.nvim_buf_set_option(buf, 'modifiable', true)
 
   local function add_line(text, level, is_open, node_id)
@@ -625,6 +627,11 @@ local function update_ui_state()
       -- api.nvim_win_set_option(r_ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
       -- else
       -- api.nvim_win_set_option(r_ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
+    else
+      -- CRITICAL FIX: Clear the cell cursor highlights when the window is inactive
+      api.nvim_buf_clear_namespace(r_ovr_buf, state.ns, 0, -1) 
+      -- You might need to re-apply the basic row highlighting if that's in state.ns
+      apply_table_highlights(r_ovr_buf)
     end
   end
 
@@ -774,6 +781,7 @@ M.open_db_float = function()
     zindex = 110,
   })
   state.wins[q_ovr_win] = 'q_overlay'
+  api.nvim_buf_set_option(q_ovr_buf, 'buftype', 'nofile')
 
   --api.nvim_win_set_option(q_ovr_win, 'number', true) -- FIXME: bug the numberings are getting reversed
   --api.nvim_win_set_option(q_ovr_win, 'relativenumber', true)
