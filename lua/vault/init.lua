@@ -257,6 +257,7 @@ end
 
 local function render_explorer_tree(buf)
   local lines = {}
+  api.nvim_buf_set_option(buf, 'modifiable', true)
 
   local function add_line(text, level, is_open, node_id)
     local indent = string.rep('  ', level)
@@ -331,6 +332,7 @@ end
 M.toggle_node = function()
   local win = api.nvim_get_current_win()
   local buf = api.nvim_win_get_buf(win)
+  api.nvim_buf_set_option(buf, 'modifiable', true)
   local cursor_row = api.nvim_win_get_cursor(win)[1]
   local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
 
@@ -343,6 +345,8 @@ M.toggle_node = function()
     -- Optional: Restore cursor position after redraw
     -- api.nvim_win_set_cursor(win, {cursor_row, 0})
   end
+
+  api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
 -- 4. Main Focus and Bottom Bar Handler
