@@ -27,6 +27,7 @@ local state = {
   open_nodes = { ['MyLocalDB'] = true, ['Tables'] = true, ['users'] = true }, -- Track state
   is_connected = false,
   db_type = nil,
+  db_types = { "SQLite", "PostgreSQL", "MySQL", "OracleDB", "MongoDB", "MariaDB" },
   icons = {
     db = '⌘',
     folder_open = '',
@@ -65,6 +66,23 @@ local sql_keywords = {
   'LIMIT',
   'HAVING',
 }
+
+local function generate_id()
+    -- Get current time in seconds since the epoch as a number (float in standard Lua)
+    local timestamp = os.time() --
+
+    -- Multiply by 1e7 (10,000,000) and convert to an integer
+    -- Lua performs floating point arithmetic, so we use math.floor to get an integer value
+    local scaled_time_int = math.floor(timestamp * 1e7)
+
+    -- Format the integer as a hexadecimal string
+    local hex_string = string.format("%x", scaled_time_int)
+
+    -- The Python [2:] slice removes the "0x" prefix.
+    -- Lua's string.format("%x", ...) does not add a prefix, so slicing is not needed.
+
+    return hex_string
+end
 
 -- 1. Setup Highlight Groups
 local function setup_highlight_groups()
@@ -270,8 +288,20 @@ local function render_explorer_tree(buf)
       icon = state.icons.field -- Or state.icons.table if you want a different icon
     end
 
+    for _, word in ipairs(state.db_types) do
+        local s, e = text:find(word)
+        if s then
+          table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (generate_id() or ''))
+          return
+        else
+          table.insert(lines, indent .. icon .. ' ' .. text)
+          return
+        end
+    end
+
     -- Store the node_id in the line for later extraction by toggle_node/switch_to_win
-    table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
+    --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
+    --table.insert(lines, indent .. icon .. ' ' .. text)
   end
 
   -- THE STATIC DATA MODEL
@@ -332,16 +362,39 @@ local function render_explorer_tree(buf)
   api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
+-- Add a function you can call externally when a connection is made
+-- M.connect_db = function ()
+local connect_db = function(ovr_buf)
+  -- Set default open states
+  state.open_nodes = { ['MyLocalDB'] = true, ['Tables'] = false, ['Views'] = false, ['Indexes'] = false, ['Triggers'] = false }
+  -- (You would also fetch real schema data here)
+  render_explorer_tree(ovr_buf)
+end
+
 -- Update your M.toggle_node function definition elsewhere in your script
 M.toggle_node = function()
   local win = api.nvim_get_current_win()
   local buf = api.nvim_win_get_buf(win)
+
   api.nvim_buf_set_option(buf, 'modifiable', true)
   local cursor_row = api.nvim_win_get_cursor(win)[1]
   local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
 
   -- Use a pattern match to reliably extract the hidden ID suffix:
-  local node_id = line:match '--ID:(%w+)'
+  --local node_id = line:match '--ID:(%w+)' -- TODO: important line for later usage
+  local node_id = line:match '(%w+)'
+  local db_type = line:match '%[([^%]]+)%]'
+
+  for _, word in ipairs(state.db_types) do
+    if state.is_connected == false then
+      if db_type == word then
+        connect_db(buf)
+        return
+      end
+    elseif state.is_connected == true then
+      break
+    end
+  end
 
   if node_id and state.open_nodes[node_id] ~= nil then
     state.open_nodes[node_id] = not state.open_nodes[node_id]
@@ -697,17 +750,6 @@ local function switch_to_win(target)
   end
 end
 
--- Add a function you can call externally when a connection is made
--- M.connect_db = function ()
-local connect_db = function(ovr_buf)
-  -- Set default open states
-  state.open_nodes = { ['MyLocalDB'] = true, ['Tables'] = false, ['Views'] = false, ['Indexes'] = false, ['Triggers'] = false }
-  -- (You would also fetch real schema data here)
-  render_explorer_tree(ovr_buf)
-  -- Optional: switch focus automatically after connection
-  switch_to_win 'overlay'
-end
-
 M.open_db_float = function()
   setup_highlight_groups()
   local ui = api.nvim_list_uis()[1]
@@ -875,11 +917,8 @@ M.open_db_float = function()
         switch_to_win 'results'
       end, { buffer = b })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
-      map(ovr_buf, 'n', '<CR>', [[<cmd>lua require'db.ui'.toggle_node()<CR>]])
       if name == 'overlay' then
-        vim.keymap.set('n', 't', function()
-          connect_db(ovr_buf)
-        end, { buffer = b })
+        map(ovr_buf, 'n', '<CR>', [[<cmd>lua require'db.ui'.toggle_node()<CR>]])
       end
       if name == 'query' then
         vim.keymap.set('i', '<Tab>', function()
