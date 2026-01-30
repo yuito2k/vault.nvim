@@ -751,21 +751,39 @@ local function switch_to_win(target)
 end
 
 M.open_db_float = function()
-  local sqlite3 = require('sqlite')
+  -- Use this line instead
+  local db = require("sqlite.db") 
 
-  if not sqlite or not sqlite.db then
-    print("Error: sqlite module not loaded correctly!")
-    return -- Stop execution if the module is nil
+  -- Now 'db' should not be nil, and db:open will work:
+  local conn, err = db:open("/home/yuito/.config/nvim/database.db") 
+
+  if not conn then
+    print("Error opening database: " .. tostring(err))
+    return
   end
 
-  local db_filename = '/home/yuito/.config/nvim/database.db' -- Replace with your database file path
-  local db = sqlite3.db:open(db_filename)
-
-  local tables_and_views = db:eval([[
-    SELECT * FROM users;
+  -- Use 'conn' for operations
+  local schema = conn:eval([[
+    SELECT name, type FROM sqlite_schema 
+    WHERE type IN ('table', 'view', 'trigger') AND name NOT LIKE 'sqlite_%' 
+    ORDER BY type, name;
   ]])
 
-  print(tables_and_views)
+  print(vim.inspect(schema))
+  db:close()
+
+  local users = db.with_open("/home/yuito/.config/nvim/database.db", function(conn)
+    -- 'conn' is valid ONLY inside this function block
+    local result = conn:eval("SELECT * FROM users")
+    return result
+  end)
+
+  print(vim.inspect(users)) 
+
+  -- Example of iterating through the users table:
+  for _, user_row in ipairs(users) do
+    print("User Email: " .. user_row.email .. ", Name: " .. user_row.name)
+  end
 
   setup_highlight_groups()
   local ui = api.nvim_list_uis()[1]
