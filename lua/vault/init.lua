@@ -23,6 +23,7 @@ local state = {
   suggest_buf = nil,
   suggestions = {},
   table_cols = {},
+  last_query_status = '',
   -- DB states
   open_nodes = { ['MyLocalDB'] = true, ['Tables'] = true, ['users'] = true }, -- Track state
   is_connected = false,
@@ -107,6 +108,7 @@ local function setup_highlight_groups()
   api.nvim_set_hl(0, 'SoftRedLabel', { fg = '#e06c75' })
   -- Define soft orange for keys/actions
   api.nvim_set_hl(0, 'SoftOrangeKey', { fg = '#d19a66' })
+  api.nvim_set_hl(0, 'DbTimeGray', { fg = '#6272A4' }) -- A nice "Dracula" style muted gray/blue
 end
 
 -- 2. Autocomplete Engine Logic
@@ -272,72 +274,6 @@ local function move_cell(dir)
   end
   local next_idx = math.max(1, math.min(#state.table_cols, current_idx + dir))
   api.nvim_win_set_cursor(win, { cursor[1], state.table_cols[next_idx] })
-end
-
-local function execute_query()
-  local q_ovr_win = nil
-  local r_ovr_buf = nil
-
-  -- Find the Query Overlay and Results Overlay
-  for id, name in pairs(state.wins) do
-    if name == 'q_overlay' then
-      q_ovr_win = id
-    end
-    if name == 'r_overlay' then
-      r_ovr_buf = api.nvim_win_get_buf(id)
-    end
-  end
-
-  if not q_ovr_win or not r_ovr_buf then
-    return
-  end
-
-  -- 1. Get the SQL query from the buffer
-  local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(q_ovr_win), 0, -1, false)
-  local sql = table.concat(lines, ' '):gsub('%s+', ' ') -- Flatten to one line
-
-  if sql == '' or sql == ' ' then
-    print 'No query entered.'
-    return
-  end
-
-  -- 2. Execute using sqlite.lua
-  -- Ensure you have an active 'db' connection object stored in your state
-  local success, result = pcall(function()
-    local path = '/home/yuito/Blue Book/database.db' -- Use your state path
-    return require('sqlite.db').with_open(path, function(conn)
-      return conn:eval(sql)
-    end)
-  end)
-
-  if not success then
-    print('SQL Error: ' .. tostring(result))
-    return
-  end
-
-  -- 3. Format the result for the table renderer
-  if type(result) == 'table' and #result > 0 then
-    local headers = {}
-    for k, _ in pairs(result[1]) do
-      table.insert(headers, k)
-    end
-
-    local rows = {}
-    for _, row_data in ipairs(result) do
-      local row = {}
-      for _, header in ipairs(headers) do
-        table.insert(row, tostring(row_data[header] or 'NULL'))
-      end
-      table.insert(rows, row)
-    end
-
-    render_results_table(r_ovr_buf, { headers = headers, rows = rows })
-    print('Query executed: ' .. #result .. ' rows returned.')
-  else
-    -- Handle non-select queries (INSERT/UPDATE/DELETE)
-    render_results_table(r_ovr_buf, { headers = { 'Status' }, rows = { { 'Success' } } })
-    print 'Query executed successfully.'
-  end
 end
 
 local function render_explorer_tree(buf)
@@ -678,9 +614,54 @@ local function update_ui_state()
           connection_status = ' Not Connected'
         end
 
+        local win_width = api.nvim_win_get_width(b_win) - 2
         local mode_text = is_insert and ' INSERT ' or ' NORMAL '
-        api.nvim_buf_set_lines(b_buf, 0, 1, false, { mode_text .. connection_status })
+        --local status_msg = state.last_query_status ~= '' and (' | ' .. state.last_query_status) or ''
+
+        -- Left side content
+        local left_status = mode_text .. (state.is_connected and ' Connected to SQLite' or ' Not Connected')
+        -- Right side content (The Query Result)
+        local formatted_time = os.date '[%H:%M:%S]'
+        local right_status -- Declare it here first
+
+        if state.last_query_status == '' then
+          right_status = formatted_time
+        else
+          right_status = formatted_time .. ' ' .. state.last_query_status
+        end
+
+        -- Set the full status line
+        -- api.nvim_buf_set_lines(b_buf, 0, 1, false, { mode_text .. connection_status .. status_msg })
         --api.nvim_buf_set_lines(b_buf, 1, 2, false, { 'Insert Mode: i | Normal Mode: <esc> | Execute: <enter> | History: h | Close: <esc> (in normal mode)' })
+
+        -- Calculate padding
+        local space_count = win_width - #left_status - #right_status - 1
+        --local full_first_line = left_status .. string.rep(' ', math.max(1, space_count)) .. right_status
+        local full_line = left_status .. string.rep(' ', space_count) .. right_status
+
+        if space_count > 0 then
+          -- Set the line
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { full_line })
+        else
+          -- If window is too small, just put one space
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { left_status .. ' ' .. right_status })
+        end
+
+        -- HIGHLIGHTS
+        -- 1. Mode Highlight (Normal/Insert)
+        api.nvim_buf_add_highlight(b_buf, -1, (is_insert and state.hl_mode_insert or state.hl_mode_normal), 0, 0, #mode_text)
+
+        -- 2. Query Message Highlight (Soft Orange if exists)
+        if #right_status > 0 then
+          local start_col = #full_line - #right_status
+          api.nvim_buf_add_highlight(b_buf, -1, 'SoftOrangeKey', 0, start_col, -1)
+        end
+
+        ---- Add a highlight for the status message specifically (Soft Orange or Green)
+        --if state.last_query_status ~= '' then
+        --  local start_col = #(mode_text .. connection_status .. ' | ')
+        --  api.nvim_buf_add_highlight(b_buf, -1, 'SoftOrangeKey', 0, start_col, -1)
+        --end
 
         -- 1. Get window width
         local win_width = api.nvim_win_get_width(b_win) - 2
@@ -790,6 +771,111 @@ local function update_ui_state()
       end
     end
   end
+end
+
+local function execute_query()
+  local q_ovr_win = nil
+  local r_ovr_buf = nil
+
+  -- Find the Query Overlay and Results Overlay
+  for id, name in pairs(state.wins) do
+    if name == 'q_overlay' then
+      q_ovr_win = id
+    end
+    if name == 'r_overlay' then
+      r_ovr_buf = api.nvim_win_get_buf(id)
+    end
+  end
+
+  if not q_ovr_win or not r_ovr_buf then
+    return
+  end
+
+  -- 1. Get the SQL query from the buffer
+  local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(q_ovr_win), 0, -1, false)
+  local sql = table.concat(lines, ' '):gsub('%s+', ' ') -- Flatten to one line
+
+  if sql == '' or sql == ' ' then
+    local headers = { 'Error' }
+    local rows = { { 'No query entered' } }
+    render_results_table(r_ovr_buf, { headers = headers, rows = rows })
+
+    --print 'No query entered.'
+    return
+  end
+
+  local elapsed_milliseconds = nil
+
+  -- 2. Execute using sqlite.lua
+  -- Ensure you have an active 'db' connection object stored in your state
+  local success, result = pcall(function()
+    local path = '/home/yuito/Blue Book/database.db' -- Use your state path
+    return require('sqlite.db').with_open(path, function(conn)
+      -- Record the start time using os.clock()
+      local start_time = os.clock()
+
+      -- ** Code to be benchmarked goes here **
+      local result = conn:eval(sql)
+      -- ** End of code to be benchmarked **
+
+      -- Record the end time
+      local end_time = os.clock()
+
+      -- Calculate the elapsed time in seconds
+      local elapsed_seconds = end_time - start_time
+
+      -- Convert the time to milliseconds for display
+      -- Multiply by 1000 and use string.format to round to two decimal places
+      elapsed_milliseconds = elapsed_seconds * 1000
+
+      return result
+    end)
+  end)
+
+  if not success then
+    local err_msg = tostring(result)
+
+    -- Extract just the SQL error part after the last colon+space
+    local clean_err = err_msg:match ':%s*(.+)$'
+    -- Or if you want everything after "sql error:"
+    local clean_err = err_msg:match '[Ee]rr[or]*:%s*(.+)$'
+
+    --print('SQL Error: ' .. (clean_err or err_msg))
+    --return
+    --state.last_query_status = 'Error: ' .. tostring(result):sub(1, 30) -- Keep it short
+
+    local headers = { 'Error' }
+    local rows = { { clean_err or err_msg } }
+    render_results_table(r_ovr_buf, { headers = headers, rows = rows })
+  else
+    -- 3. Format the result for the table renderer
+    if type(result) == 'table' and #result > 0 then
+      local headers = {}
+      for k, _ in pairs(result[1]) do
+        table.insert(headers, k)
+      end
+
+      local rows = {}
+      for _, row_data in ipairs(result) do
+        local row = {}
+        for _, header in ipairs(headers) do
+          table.insert(row, tostring(row_data[header] or 'NULL'))
+        end
+        table.insert(rows, row)
+      end
+
+      render_results_table(r_ovr_buf, { headers = headers, rows = rows })
+      --print('Query executed: ' .. #result .. ' rows returned.')
+      state.last_query_status = 'Query executed: ' .. #result .. ' rows returned in ' .. string.format('%.2f', elapsed_milliseconds) .. ' ms'
+    else
+      -- Handle non-select queries (INSERT/UPDATE/DELETE)
+      render_results_table(r_ovr_buf, { headers = { 'Status' }, rows = { { 'Success' } } })
+      --print 'Query executed successfully.'
+      state.last_query_status = 'Query executed successfully'
+    end
+  end
+
+  update_ui_state()
 end
 
 M.close_all_windows = function()
