@@ -274,6 +274,72 @@ local function move_cell(dir)
   api.nvim_win_set_cursor(win, { cursor[1], state.table_cols[next_idx] })
 end
 
+local function execute_query()
+  local q_ovr_win = nil
+  local r_ovr_buf = nil
+
+  -- Find the Query Overlay and Results Overlay
+  for id, name in pairs(state.wins) do
+    if name == 'q_overlay' then
+      q_ovr_win = id
+    end
+    if name == 'r_overlay' then
+      r_ovr_buf = api.nvim_win_get_buf(id)
+    end
+  end
+
+  if not q_ovr_win or not r_ovr_buf then
+    return
+  end
+
+  -- 1. Get the SQL query from the buffer
+  local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(q_ovr_win), 0, -1, false)
+  local sql = table.concat(lines, ' '):gsub('%s+', ' ') -- Flatten to one line
+
+  if sql == '' or sql == ' ' then
+    print 'No query entered.'
+    return
+  end
+
+  -- 2. Execute using sqlite.lua
+  -- Ensure you have an active 'db' connection object stored in your state
+  local success, result = pcall(function()
+    local path = '/home/yuito/Blue Book/database.db' -- Use your state path
+    return require('sqlite.db').with_open(path, function(conn)
+      return conn:eval(sql)
+    end)
+  end)
+
+  if not success then
+    print('SQL Error: ' .. tostring(result))
+    return
+  end
+
+  -- 3. Format the result for the table renderer
+  if type(result) == 'table' and #result > 0 then
+    local headers = {}
+    for k, _ in pairs(result[1]) do
+      table.insert(headers, k)
+    end
+
+    local rows = {}
+    for _, row_data in ipairs(result) do
+      local row = {}
+      for _, header in ipairs(headers) do
+        table.insert(row, tostring(row_data[header] or 'NULL'))
+      end
+      table.insert(rows, row)
+    end
+
+    render_results_table(r_ovr_buf, { headers = headers, rows = rows })
+    print('Query executed: ' .. #result .. ' rows returned.')
+  else
+    -- Handle non-select queries (INSERT/UPDATE/DELETE)
+    render_results_table(r_ovr_buf, { headers = { 'Status' }, rows = { { 'Success' } } })
+    print 'Query executed successfully.'
+  end
+end
+
 local function render_explorer_tree(buf)
   local lines = {}
   api.nvim_buf_set_option(buf, 'buftype', 'nofile')
@@ -968,6 +1034,10 @@ M.open_db_float = function()
           end
         end, { buffer = b, expr = true })
         vim.keymap.set('i', '<Esc>', '<cmd>stopinsert<cr>', { buffer = b })
+      end
+      if name == 'q_overlay' then
+        -- Execute query on Enter in Normal mode
+        vim.keymap.set('n', '<CR>', execute_query, { buffer = b, desc = 'Execute SQL Query' })
       end
     end
   end
