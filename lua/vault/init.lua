@@ -28,6 +28,7 @@ local state = {
   open_nodes = { ['MyLocalDB'] = true, ['Tables'] = true, ['users'] = true }, -- Track state
   is_connected = false,
   db_type = nil,
+  db_data = {},
   db_types = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' },
   icons = {
     db = '⌘',
@@ -276,6 +277,61 @@ local function move_cell(dir)
   api.nvim_win_set_cursor(win, { cursor[1], state.table_cols[next_idx] })
 end
 
+local function fetch_dynamic_data(db_path)
+    local db = require("sqlite.db"):open(db_path)
+    
+    -- 1. Initialize the root structure
+    state.db_data = {
+        ["MyLocalDB"] = { 
+            id = generate_id() or "", 
+            name = "MyLocalDB [SQLite]", 
+            type = "db", 
+            children = { "Tables", "Views", "Indexes", "Triggers" } 
+        },
+        ["Tables"] = { name = "Tables", type = "folder", children = {} },
+        ["Views"] = { name = "Views", type = "folder", children = {} },
+        ["Indexes"] = { name = "Indexes", type = "folder", children = {} },
+        ["Triggers"] = { name = "Triggers", type = "folder", children = {} },
+    }
+
+    -- 2. Fetch all objects (Tables, Views, Triggers, Indexes)
+    local schema = db:eval([[
+        SELECT name, type FROM sqlite_schema 
+        WHERE name NOT LIKE 'sqlite_%'
+    ]])
+
+    for _, obj in ipairs(schema) do
+        local folder_key = obj.type:gsub("^%l", string.upper) .. "s" -- e.g., 'table' -> 'Tables'
+        if state.db_data[folder_key] then
+            table.insert(state.db_data[folder_key].children, obj.name)
+            
+            -- 3. If it's a table, fetch its columns (fields)
+            if obj.type == "table" then
+                local cols = db:eval("PRAGMA table_info(" .. obj.name .. ")")
+                local field_children = {}
+                for _, col in ipairs(cols) do
+                    local field_name = obj.name .. "." .. col.name
+                    local display = col.name .. " " .. col.type
+                    state.db_data[field_name] = { name = display, type = "field" }
+                    table.insert(field_children, field_name)
+                end
+                
+                state.db_data[obj.name] = { 
+                    name = obj.name, 
+                    type = "table", 
+                    children = field_children 
+                }
+            else
+                -- Views/Indexes/Triggers usually don't have children in this UI
+                state.db_data[obj.name] = { name = obj.name, type = obj.type, children = {} }
+            end
+        end
+    end
+
+    db:close()
+    return state.db_data
+end
+
 local function render_explorer_tree(buf)
   local lines = {}
   api.nvim_buf_set_option(buf, 'buftype', 'nofile')
@@ -293,7 +349,8 @@ local function render_explorer_tree(buf)
     for _, word in ipairs(state.db_types) do
       local s, e = text:find(word)
       if s then
-        table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (generate_id() or ''))
+        --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (generate_id() or ''))
+        table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
         return
       else
         table.insert(lines, indent .. icon .. ' ' .. text)
@@ -306,23 +363,9 @@ local function render_explorer_tree(buf)
     --table.insert(lines, indent .. icon .. ' ' .. text)
   end
 
-  -- THE STATIC DATA MODEL
-  local data = {
-    ['MyLocalDB'] = { name = 'MyLocalDB [SQLite]', type = 'db', children = { 'Tables', 'Views', 'Indexes', 'Triggers' } },
-    ['Tables'] = { name = 'Tables', type = 'folder', children = { 'users' } },
-    ['Views'] = { name = 'Views', type = 'folder', children = {} },
-    ['Indexes'] = { name = 'Indexes', type = 'folder', children = {} },
-    ['Triggers'] = { name = 'Triggers', type = 'folder', children = {} },
-    ['users'] = { name = 'users', type = 'table', children = { 'name TEXT', 'email TEXT', 'joined_at INTEGER' } },
-    -- ADDED KEYS AND COMMAS BELOW = {name = 'name TEXT', type = 'field'}, = {name = 'email TEXT', type = 'field'},
-    ['name'] = { name = 'name TEXT', type = 'field' },
-    ['email'] = { name = 'email TEXT', type = 'field' },
-    ['joined_at'] = { name = 'joined_at INTEGER', type = 'field' },
-  }
-
   -- THE RECURSIVE DRAW LOGIC
   local function draw_node(node_id, level)
-    local node_data = data[node_id]
+    local node_data = state.db_data[node_id]
 
     -- Safeguard against missing data (fixes the previous error)
     if node_data == nil then
@@ -336,7 +379,7 @@ local function render_explorer_tree(buf)
     -- Handle different display types and add the current line
     if node_data.type == 'db' then
       -- DB node is always collapsible
-      add_line(display_name, level, is_open, node_id)
+      add_line(display_name, level, is_open, node_data.id)
       if is_open then
         -- Optional static extra line for the path
         add_line('Path: ./Blue Book/Codes/Test_Projects/db.nvim/examples/demo.db', level + 1, nil, nil)
@@ -367,8 +410,12 @@ end
 -- Add a function you can call externally when a connection is made
 -- M.connect_db = function ()
 local connect_db = function(ovr_buf)
+  local path = "/home/yuito/Blue Book/database.db" -- Use your actual path
+  state.db_data = fetch_dynamic_data(path)
+  state.is_connected = true
+
   -- Set default open states
-  state.open_nodes = { ['MyLocalDB'] = true, ['Tables'] = false, ['Views'] = false, ['Indexes'] = false, ['Triggers'] = false }
+  state.open_nodes = { ["MyLocalDB"] = true, ["Tables"] = false }
   -- (You would also fetch real schema data here)
   render_explorer_tree(ovr_buf)
 end
@@ -387,15 +434,20 @@ M.toggle_node = function()
   local node_id = line:match '(%w+)'
   local db_type = line:match '%[([^%]]+)%]'
 
-  for _, word in ipairs(state.db_types) do
-    if state.is_connected == false then
-      if db_type == word then
-        connect_db(buf)
-        return
-      end
-    elseif state.is_connected == true then
-      break
-    end
+  --for _, word in ipairs(state.db_types) do
+  --  if state.is_connected == false then
+  --    if db_type == word then
+  --      connect_db(buf)
+  --      return
+  --    end
+  --  elseif state.is_connected == true then
+  --    break
+  --  end
+  --end
+
+  if not state.is_connected then
+    connect_db(buf)
+    return
   end
 
   if node_id and state.open_nodes[node_id] ~= nil then
@@ -845,7 +897,7 @@ local function execute_query()
     --state.last_query_status = 'Error: ' .. tostring(result):sub(1, 30) -- Keep it short
 
     local headers = { 'Error' }
-    local rows = { { clean_err or err_msg } }
+    local rows = { { 'SQL Error: ' .. clean_err or err_msg } }
     render_results_table(r_ovr_buf, { headers = headers, rows = rows })
   else
     -- 3. Format the result for the table renderer
@@ -871,7 +923,7 @@ local function execute_query()
       -- Handle non-select queries (INSERT/UPDATE/DELETE)
       render_results_table(r_ovr_buf, { headers = { 'Status' }, rows = { { 'Success' } } })
       --print 'Query executed successfully.'
-      state.last_query_status = 'Query executed successfully'
+      state.last_query_status = 'Query executed successfully (took' .. string.format('%.2f', elapsed_milliseconds) .. ' ms)'
     end
   end
 
