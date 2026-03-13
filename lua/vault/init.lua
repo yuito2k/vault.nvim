@@ -110,6 +110,7 @@ local function setup_highlight_groups()
   -- Define soft orange for keys/actions
   api.nvim_set_hl(0, 'SoftOrangeKey', { fg = '#d19a66' })
   api.nvim_set_hl(0, 'DbTimeGray', { fg = '#6272A4' }) -- A nice "Dracula" style muted gray/blue
+  api.nvim_set_hl(0, "MyCustomWinBG", { bg = "#1c1c23", fg = "#cdd6f4" }) -- for the new connection pop up
 end
 
 -- 2. Autocomplete Engine Logic
@@ -369,7 +370,7 @@ local function render_explorer_tree(buf)
 
     -- Safeguard against missing data (fixes the previous error)
     if node_data == nil then
-      print('Error: Missing node data for ID: ' .. tostring(node_id))
+      -- print('Error: Missing node data for ID: ' .. tostring(node_id))
       return
     end
 
@@ -405,6 +406,120 @@ local function render_explorer_tree(buf)
   -- Finally, update the Neovim buffer
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   api.nvim_buf_set_option(buf, 'modifiable', false)
+end
+
+local conn_state = {
+    active_idx = 1,
+    fields = {
+        { name = " Database Name ", value = "", type = "input", row = 4, col = 6, width = 75 },
+        { name = " Database Type ", value = "SQLite", type = "dropdown", row = 8, col = 6, width = 75, options = {"SQLite", "PostgreSQL", "MySQL"} },
+        { name = " Database Path ", value = "/path/to/db.db", type = "input", row = 12, col = 6, width = 70 },
+        { name = "Browser", value = "...", type = "button", row = 12, col = 78, width = 3 }
+    },
+    wins = {}, -- Track all 4 field windows here
+    main_win = nil,
+}
+
+local function render_connection_ui()
+    for id, name in pairs(state.wins) do
+      if name == 'overlay' and api.nvim_win_is_valid(id) then
+        api.nvim_set_current_win(id)
+      end
+    end
+
+    local buf = vim.api.nvim_create_buf(false, true)
+    local width, height = 80, 26
+    local row = math.floor((vim.o.lines - height) / 2)
+    local col = math.floor((vim.o.columns - width) / 2)
+
+    conn_state.main_win = vim.api.nvim_open_win(buf, true, {
+        relative = 'win', row = row-5, col = col, width = width, height = height,
+        style = 'minimal', border = 'rounded', title = " New Connection ", title_pos = "left",
+        footer = " Test ^t  Save ^s  Cancel <esc> ", footer_pos = "right", zindex = 250
+    })
+
+    -- Apply the custom background to this specific window
+    vim.api.nvim_set_option_value("winhl", "Normal:MyCustomWinBG,FloatBorder:FloatBorder", { win = conn_state.main_win })
+
+    -- 1. Draw Static Background (the boxes and labels)
+    local lines = {
+        "",
+        "   General ",
+        "ㅤ───────────────────────────────────────────────────────────────────────────",
+    }
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+
+    -- 1. Clear any old windows if re-opening
+    for _, win in pairs(conn_state.wins) do
+        if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+    end
+    conn_state.wins = {}
+
+    -- 2. Create ALL field windows immediately
+    for i, field in ipairs(conn_state.fields) do
+        local ibuf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { " " .. field.value })
+        
+        local win = vim.api.nvim_open_win(ibuf, false, { -- open as false (don't focus yet)
+            relative = 'win', win = conn_state.main_win,
+            row = field.row, col = field.col-5, width = field.width, height = 1,
+            title = field.name ~= 'Browser' and field.name or nil,
+            style = 'minimal', border = 'rounded', zindex = 260
+        })
+        conn_state.wins[i] = win
+        
+        
+    end
+
+    -- 3. Function to update which one is "Bright"
+    function update_focus()
+        for i, win in ipairs(conn_state.wins) do
+            if i == conn_state.active_idx then
+                -- Active: Bright Border/Text
+                vim.api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+                vim.api.nvim_set_current_win(win)
+            else
+                -- Inactive: Dimmed (Comment color usually works well for dimming)
+                vim.api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+            end
+        end
+
+        for i, field in ipairs(conn_state.fields) do
+          -- Set common keymaps for every field buffer
+          local opts = { buffer = ibuf, silent = true }
+          vim.keymap.set("n", "<Tab>", function()
+              conn_state.active_idx = (conn_state.active_idx % #conn_state.fields) + 1
+              update_focus()
+          end, opts)
+        
+          -- ENTER to edit (simplified)
+          vim.keymap.set("n", "<CR>", function()
+              if field.name == "Browser" then
+                  print("Opening file browser...") -- Logic for telescope/oil.nvim here
+              else
+                  vim.cmd("startinsert!")
+              end
+          end, opts)
+        
+          -- ESC to close everything
+          vim.keymap.set("n", "<esc>", function()
+              for i, win in ipairs(conn_state.wins) do
+                api.nvim_win_close(win, true)
+              end
+              api.nvim_win_close(conn_state.main_win, true)
+              -- TODO:  later replace with switch_to_win('overlay') the exact same thing
+              for id, name in pairs(state.wins) do
+                if name == 'overlay' and api.nvim_win_is_valid(id) then
+                  api.nvim_set_current_win(id)
+                  return
+                end
+              end
+          end, opts)
+        end
+    end
+
+    update_focus()
 end
 
 -- Add a function you can call externally when a connection is made
@@ -942,6 +1057,7 @@ M.close_all_windows = function()
     api.nvim_win_close(state.parent_win_id, true)
   end
   state.wins = {}
+  state.db_data = {}
 end
 
 local function switch_to_win(target)
@@ -960,39 +1076,39 @@ M.open_db_float = function()
   -- Now 'db' should not be nil, and db:open will work:
   --local conn, err = db:open '/home/yuito/Blue Book/database.db'
 
-  local path = '/home/yuito/Blue Book/database.db'
-  local f = io.open(path, 'r')
+  --local path = '/home/yuito/Blue Book/database.db'
+  --local f = io.open(path, 'r')
 
-  if f then
-    f:close()
-    local db = require('sqlite.db'):open(path)
+  --if f then
+  --  f:close()
+  --  local db = require('sqlite.db'):open(path)
 
     -- Use 'conn' for operations
-    local schema = db:eval [[
-      SELECT name, type FROM sqlite_schema
-      WHERE type IN ('table', 'view', 'trigger') AND name NOT LIKE 'sqlite_%'
-      ORDER BY type, name;
-    ]]
+  --  local schema = db:eval [[
+  --    SELECT name, type FROM sqlite_schema
+  --    WHERE type IN ('table', 'view', 'trigger') AND name NOT LIKE 'sqlite_%'
+  --    ORDER BY type, name;
+  --  ]]
 
-    print(vim.inspect(schema))
-    db:close()
+  --  print(vim.inspect(schema))
+  --  db:close()
 
-    local users = db.with_open('/home/yuito/Blue Book/database.db', function(conn)
+  --  local users = db.with_open('/home/yuito/Blue Book/database.db', function(conn)
       -- 'conn' is valid ONLY inside this function block
-      local result = conn:eval 'SELECT * FROM users'
-      return result
-    end)
+  --    local result = conn:eval 'SELECT * FROM users'
+  --    return result
+  --  end)
 
-    print(vim.inspect(users))
+  --  print(vim.inspect(users))
 
     -- Example of iterating through the users table:
-    for _, user_row in ipairs(users) do
-      print('User Email: ' .. user_row.email .. ', Name: ' .. user_row.name)
-    end
-  else
-    print('Error: Database file not found at ' .. path)
-    return
-  end
+    --for _, user_row in ipairs(users) do
+    --  print('User Email: ' .. user_row.email .. ', Name: ' .. user_row.name)
+    --end
+  --else
+  --  print('Error: Database file not found at ' .. path)
+  --  return
+  --end
 
   setup_highlight_groups()
   local ui = api.nvim_list_uis()[1]
@@ -1159,6 +1275,9 @@ M.open_db_float = function()
       vim.keymap.set('n', 'r', function()
         switch_to_win 'results'
       end, { buffer = b })
+      vim.keymap.set("n", "n", function()
+        render_connection_ui()
+      end, { buffer = b, noremap = true, silent = true })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
       if name == 'overlay' then
         map(ovr_buf, 'n', '<CR>', [[<cmd>lua require'db.ui'.toggle_node()<CR>]])
