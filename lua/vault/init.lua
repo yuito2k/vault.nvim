@@ -25,7 +25,8 @@ local state = {
   table_cols = {},
   last_query_status = '',
   -- DB states
-  open_nodes = { ['MyLocalDB'] = true, ['Tables'] = true, ['users'] = true }, -- Track state
+  open_nodes = {}, -- Track state
+  root_node_id = nil,
   is_connected = false,
   db_type = nil,
   db_data = {},
@@ -278,14 +279,14 @@ local function move_cell(dir)
   api.nvim_win_set_cursor(win, { cursor[1], state.table_cols[next_idx] })
 end
 
-local function fetch_dynamic_data(db_path)
+local function fetch_dynamic_data(db_path, db_name, db_type, db_id)
   local db = require('sqlite.db'):open(db_path)
 
   -- 1. Initialize the root structure
   state.db_data = {
-    ['MyLocalDB'] = {
-      id = generate_id() or '',
-      name = 'MyLocalDB [SQLite]',
+    [db_name] = {
+      id = db_id or '',
+      name = db_name .. ' ' .. '[' .. db_type .. ']',
       type = 'db',
       children = { 'Tables', 'Views', 'Indexes', 'Triggers' },
     },
@@ -297,9 +298,9 @@ local function fetch_dynamic_data(db_path)
 
   -- 2. Fetch all objects (Tables, Views, Triggers, Indexes)
   local schema = db:eval [[
-        SELECT name, type FROM sqlite_schema 
-        WHERE name NOT LIKE 'sqlite_%'
-    ]]
+      SELECT name, type FROM sqlite_schema 
+      WHERE name NOT LIKE 'sqlite_%'
+  ]]
 
   for _, obj in ipairs(schema) do
     local folder_key = obj.type:gsub('^%l', string.upper) .. 's' -- e.g., 'table' -> 'Tables'
@@ -347,17 +348,17 @@ local function render_explorer_tree(buf)
       icon = state.icons.field -- Or state.icons.table if you want a different icon
     end
 
-    for _, word in ipairs(state.db_types) do
+    for _, word in pairs(state.db_types) do
       local s, e = text:find(word)
+
       if s then
         --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (generate_id() or ''))
-        table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
-        return
-      else
-        table.insert(lines, indent .. icon .. ' ' .. text)
+        table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. node_id)
         return
       end
     end
+
+    table.insert(lines, indent .. icon .. ' ' .. text)
 
     -- Store the node_id in the line for later extraction by toggle_node/switch_to_win
     --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
@@ -370,7 +371,7 @@ local function render_explorer_tree(buf)
 
     -- Safeguard against missing data (fixes the previous error)
     if node_data == nil then
-      -- print('Error: Missing node data for ID: ' .. tostring(node_id))
+      --print('Error: Missing node data for ID: ' .. tostring(node_id))
       return
     end
 
@@ -385,9 +386,12 @@ local function render_explorer_tree(buf)
         -- Optional static extra line for the path
         add_line('Path: ./Blue Book/Codes/Test_Projects/db.nvim/examples/demo.db', level + 1, nil, nil)
       end
-    elseif node_data.type == 'folder' or node_data.type == 'table' then
-      -- Table and Folder nodes are collapsible
+    elseif node_data.type == 'folder' then
+      -- Folder nodes are collapsible
       add_line(display_name, level, is_open, node_id)
+    elseif node_data.type == 'table' then
+      -- Table nodes are collapsible
+      add_line(display_name, level, nil, node_id)
     else -- 'field' type (leaf node)
       add_line(display_name, level, nil, node_id)
     end
@@ -401,7 +405,9 @@ local function render_explorer_tree(buf)
   end
 
   -- Start the drawing process from the root node
-  draw_node('MyLocalDB', 0)
+  -- DYNAMIC FIX: Use the connected DB name or a default fallback
+  local root_id = state.root_node_id or 'MyDatabase'
+  draw_node(root_id, 0)
 
   -- Finally, update the Neovim buffer
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -478,8 +484,6 @@ local function trigger_save_connection()
   local selected_type = get_field_text(2)
   local typed_path = get_field_text(3)
 
-  print(typed_name, typed_path, selected_type)
-
   -- 3. Validation: Check if the file exists at the typed path
   local file_exists = vim.loop.fs_stat(typed_path)
   if not file_exists then
@@ -508,7 +512,7 @@ local function trigger_save_connection()
     end)
 
     if success then
-      print("Successfully saved connection: " .. typed_name)
+      --print("Successfully saved connection: " .. typed_name)
       for id, name in pairs(state.wins) do
         if name == 'overlay' then
             local ovr_buf = vim.api.nvim_win_get_buf(id)
@@ -722,15 +726,47 @@ end
 
 -- Add a function you can call externally when a connection is made
 -- M.connect_db = function ()
-local connect_db = function(ovr_buf)
-  local path = '/home/yuito/Blue Book/database.db' -- Use your actual path
-  state.db_data = fetch_dynamic_data(path)
-  state.is_connected = true
+local connect_db = function(ovr_buf, db_id)
+  local path = './database.db'
+  local f = io.open(path, 'r')
 
-  -- Set default open states
-  state.open_nodes = { ['MyLocalDB'] = true, ['Tables'] = false }
-  -- (You would also fetch real schema data here)
-  render_explorer_tree(ovr_buf)
+  if f then
+    f:close()
+    local db = require('sqlite.db'):open(path)
+
+    local query = string.format(
+      [[SELECT name, type, path FROM database where id = '%s';]],
+      db_id:gsub("'", "''")
+    )
+
+    local result = db:eval(query)
+    local db_name = result[1].name
+    local db_type = result[1].type
+    local db_path = result[1].path
+
+    state.db_data = fetch_dynamic_data(db_path, db_name, db_type, db_id)
+    state.is_connected = true
+
+    -- Set default open states
+    --state.open_nodes = { [ db_name ] = true, ['Tables'] = false }
+    -- (You would also fetch real schema data here)
+
+    -- DYNAMIC FIX: Use the actual db_name from the database as the root key
+    state.open_nodes = { 
+      [db_name] = true,   -- Expands the Database root
+      ['Tables'] = false   -- Expands the "Tables" folder automatically if true
+    }
+    state.root_node_id = db_name -- Store this to use in render_explorer_tree
+
+    for _, child_id in ipairs(state.db_data[db_name].children) do
+      if state.db_data[child_id].type == 'folder' then
+        state.open_nodes[child_id] = false -- Auto-expand all top-level folders if true
+      end
+    end
+
+    render_explorer_tree(ovr_buf)
+    db:close()
+  end
 end
 
 -- Update your M.toggle_node function definition elsewhere in your script
@@ -743,31 +779,36 @@ M.toggle_node = function()
   local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
 
   -- Use a pattern match to reliably extract the hidden ID suffix:
-  --local node_id = line:match '--ID:(%w+)' -- TODO: important line for later usage
-  local node_id = line:match '(%w+)'
+  local node_id = line:match '--ID:(%w+)' -- TODO: important line for later usage
+  local node = line:match '(%w+)'
   local db_type = line:match '%[([^%]]+)%]'
 
-  --for _, word in ipairs(state.db_types) do
-  --  if state.is_connected == false then
-  --    if db_type == word then
-  --      connect_db(buf)
-  --      return
-  --    end
-  --  elseif state.is_connected == true then
-  --    break
-  --  end
-  --end
-
-  if not state.is_connected then
-    connect_db(buf)
-    return
+  for _, word in ipairs(state.db_types) do
+    if state.is_connected == false then
+      if db_type == word then
+        connect_db(buf, node_id)
+        return
+      end
+    elseif state.is_connected == true then
+      break
+    end
   end
 
-  if node_id and state.open_nodes[node_id] ~= nil then
-    state.open_nodes[node_id] = not state.open_nodes[node_id]
-    render_explorer_tree(buf) -- Re-render the explorer buffer
-    -- Optional: Restore cursor position after redraw
-    -- api.nvim_win_set_cursor(win, {cursor_row, 0})
+  --if node and state.open_nodes[node] ~= nil then
+  --  state.open_nodes[node] = not state.open_nodes[node]
+  --  render_explorer_tree(buf) -- Re-render the explorer buffer
+  --  -- Optional: Restore cursor position after redraw
+  --  -- api.nvim_win_set_cursor(win, {cursor_row, 0})
+  --end
+
+  -- DYNAMIC FIX: If the node isn't in open_nodes yet, initialize it
+  if node and state.db_data[node] then
+    if state.open_nodes[node] == nil then
+      state.open_nodes[node] = false
+    end
+    
+    state.open_nodes[node] = not state.open_nodes[node]
+    render_explorer_tree(buf)
   end
 
   api.nvim_buf_set_option(buf, 'modifiable', false)
@@ -928,7 +969,23 @@ local function update_ui_state()
   if ovr_buf and api.nvim_buf_is_valid(ovr_buf) then
     api.nvim_buf_clear_namespace(ovr_buf, state.overlay_ns, 0, -1)
     if is_ovr_active then
-      api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1)
+      api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1) -- this is for highlighting the first line only
+
+      -- 1. Get the total number of lines in the buffer
+      --local line_count = api.nvim_buf_line_count(ovr_buf)
+
+      -- 2. Loop through each line (0-indexed)
+      --for i = 0, line_count - 1 do
+      --    api.nvim_buf_add_highlight(
+      --        ovr_buf, 
+      --        state.overlay_ns, 
+      --        state.hl_first_line_text, 
+      --        i,    -- current line index
+      --        4,    -- start column
+      --        -1    -- end column (highlights to the end of the line)
+      --    )
+      --end
+      
       api.nvim_win_set_option(ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
       if b_buf then
         api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
