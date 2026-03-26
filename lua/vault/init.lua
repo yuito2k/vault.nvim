@@ -520,7 +520,7 @@ local function trigger_save_connection()
             api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
             --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-            local line_content = ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
+            local line_content = ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
 
             -- 1. Get the content of the very first line (index 0 to 1)
             local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
@@ -580,7 +580,7 @@ local function render_connection_ui()
     border = 'rounded',
     title = ' New Connection ',
     title_pos = 'left',
-    footer = ' Move <tab> Select <enter>  Save <s>  Cancel <esc> ',
+    footer = ' (Move <tab>) (Select <enter>) (Save <s>) (Cancel <esc>) ',
     footer_pos = 'right',
     zindex = 250,
   })
@@ -769,6 +769,81 @@ local connect_db = function(ovr_buf, db_id)
   end
 end
 
+-- New function to close the active DB tree and return to the saved list
+M.disconnect_db = function()
+  local ovr_win, ovr_buf = nil, nil
+  for id, name in pairs(state.wins) do
+      if name == 'overlay' then
+          ovr_win = id
+          ovr_buf = api.nvim_win_get_buf(id)
+      end
+  end
+
+  if not ovr_buf then return end
+
+  -- 1. Reset Connection States
+  state.is_connected = false
+  state.root_node_id = nil
+  state.db_data = {} -- Clear the temporary schema data
+    
+  -- 2. Clean UI
+  api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+  api.nvim_buf_clear_namespace(ovr_buf, state.overlay_ns, 0, -1)
+    
+  -- 3. Re-render the initial list
+  -- This will now fall back to your saved connection lines
+  render_explorer_tree(ovr_buf)
+
+
+  local path = './database.db'
+  local f = io.open(path, 'r')
+
+  if f then
+    f:close()
+    local db = require('sqlite.db'):open(path)
+    local result = nil
+
+    local success, err = pcall(function()
+      result = db:eval("SELECT * from database") -- Replace 'db' with your actual database handler object
+    end)
+
+    if success then
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' then
+          local ovr_buf = vim.api.nvim_win_get_buf(id)
+          api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+          api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+
+          for _, row in ipairs(result) do
+            -- 1. Get the content of the very first line (index 0 to 1)
+            local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+
+            --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+            local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+
+            -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+            if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+              -- Replace the empty first line
+              vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+            else
+              -- Append a new line at the very end
+              vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+            end
+          end
+
+          break
+        end
+      end
+    elseif not success then
+      print("Database Error: " .. tostring(err))
+    end
+
+    db:close()
+  end
+    
+  api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+end
+
 -- Update your M.toggle_node function definition elsewhere in your script
 M.toggle_node = function()
   local win = api.nvim_get_current_win()
@@ -790,7 +865,7 @@ M.toggle_node = function()
         return
       end
     elseif state.is_connected == true then
-      break
+      break        --        
     end
   end
 
@@ -969,22 +1044,24 @@ local function update_ui_state()
   if ovr_buf and api.nvim_buf_is_valid(ovr_buf) then
     api.nvim_buf_clear_namespace(ovr_buf, state.overlay_ns, 0, -1)
     if is_ovr_active then
-      api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1) -- this is for highlighting the first line only
+      if state.is_connected == true then
+        api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1) -- this is for highlighting the first line only
+      else
+        -- 1. Get the total number of lines in the buffer
+        local line_count = api.nvim_buf_line_count(ovr_buf)
 
-      -- 1. Get the total number of lines in the buffer
-      --local line_count = api.nvim_buf_line_count(ovr_buf)
-
-      -- 2. Loop through each line (0-indexed)
-      --for i = 0, line_count - 1 do
-      --    api.nvim_buf_add_highlight(
-      --        ovr_buf, 
-      --        state.overlay_ns, 
-      --        state.hl_first_line_text, 
-      --        i,    -- current line index
-      --        4,    -- start column
-      --        -1    -- end column (highlights to the end of the line)
-      --    )
-      --end
+        -- 2. Loop through each line (0-indexed)
+        for i = 0, line_count - 1 do
+          api.nvim_buf_add_highlight(
+            ovr_buf, 
+            state.overlay_ns, 
+            state.hl_first_line_text, 
+            i,    -- current line index
+            5,    -- start column  
+            -1    -- end column (highlights to the end of the line)
+          )
+        end
+      end
       
       api.nvim_win_set_option(ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
       if b_buf then
@@ -1003,7 +1080,7 @@ local function update_ui_state()
         local win_width = api.nvim_win_get_width(b_win) - 2
 
         -- 2. Your existing text
-        local left_text = 'Connect: <enter> | New: n | Edit: e | Delete: d | Refresh: f | Close: <esc> (in normal mode)'
+        local left_text = 'Connect: <enter> | New: n | Edit: e | Close: m | Delete: d | Refresh: f | Exit: <esc>'
         local right_text = 'Help: ? | Leader: <space>'
 
         -- 3. Calculate spaces needed
@@ -1089,7 +1166,7 @@ local function update_ui_state()
         local win_width = api.nvim_win_get_width(b_win) - 2
 
         -- 2. Your existing text
-        local left_text = 'Insert Mode: i | Normal Mode: <esc> | Execute: <enter> | History: h | Close: <esc> (in normal mode)'
+        local left_text = 'Insert Mode: i | Execute: <enter> | History: h | Exit: <esc>'
         local right_text = 'Help: ? | Leader: <space>'
 
         -- 3. Calculate spaces needed
@@ -1130,7 +1207,7 @@ local function update_ui_state()
         local win_width = api.nvim_win_get_width(b_win) - 2
 
         -- 2. Your existing text
-        local left_text = 'Close: <esc> (in normal mode)'
+        local left_text = 'Exit: <esc>'
         local right_text = 'Help: ? | Leader: <space>'
 
         -- 3. Calculate spaces needed
@@ -1174,7 +1251,7 @@ local function update_ui_state()
     local line_idx = i - 1
 
     -- Patterns to match: Label (Soft Red)
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -1184,7 +1261,7 @@ local function update_ui_state()
 
     -- Patterns to match: Keys (Soft Orange)
     -- Uses lua patterns to find <...> or single letters after a colon
-    local orange_patterns = { '<enter>', ' n ', '<space>', '?', ' e ', ' f ', ' d ', ' i ', ' h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' n ', '<space>', '?', ' e ', ' m ', ' f ', ' d ', ' i ', ' h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
@@ -1479,16 +1556,63 @@ M.open_db_float = function()
   render_results_table(r_ovr_buf, {
     headers = { 'ID', 'USERNAME', 'EMAIL', 'STATUS' },
     rows = {
-      { '1', 'alice', 'asdfjhskdjf@x.com', 'ACTIVE' },
-      { '2', 'bob', 'bsmdfkjsdfs@y.com', 'INACTIVE' },
+      { '1', 'alice', 'alice@gmail.com', 'ACTIVE' },
+      { '2', 'bob', 'bob@yahoo.com', 'INACTIVE' },
       {
         '3',
         'dev',
-        'dsjkhfskjdhgjkdsg@z.com',
+        'dev@nhl.edu.uk',
         'ACTIVE',
       },
     },
   })
+
+  local path = './database.db'
+  local f = io.open(path, 'r')
+
+  if f then
+    f:close()
+    local db = require('sqlite.db'):open(path)
+    local result = nil
+
+    local success, err = pcall(function()
+      result = db:eval("SELECT * from database") -- Replace 'db' with your actual database handler object
+    end)
+
+    if success then
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' then
+          local ovr_buf = vim.api.nvim_win_get_buf(id)
+          api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+          api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+
+          for _, row in ipairs(result) do
+            -- 1. Get the content of the very first line (index 0 to 1)
+            local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+
+            --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+            local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+
+            -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+            if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+              -- Replace the empty first line
+              vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+            else
+              -- Append a new line at the very end
+              vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+            end
+          end
+
+          break
+        end
+      end
+    elseif not success then
+      print("Database Error: " .. tostring(err))
+    end
+
+    db:close()
+  end
+  api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
 
   api.nvim_win_set_option(r_win, 'cursorline', false)
   api.nvim_win_set_option(r_ovr_win, 'cursorline', false)
@@ -1531,9 +1655,14 @@ M.open_db_float = function()
       vim.keymap.set('n', 'r', function()
         switch_to_win 'results'
       end, { buffer = b })
-      vim.keymap.set('n', 'n', function()
-        render_connection_ui()
-      end, { buffer = b, noremap = true, silent = true })
+      if name == 'overlay' then
+        vim.keymap.set('n', 'n', function()
+          render_connection_ui()
+        end, { buffer = b, noremap = true, silent = true })
+      end
+      vim.keymap.set('n', 'm', function()
+        M.disconnect_db()
+      end, { buffer = ovr_buf, desc = "Close DB Tree and return to list" })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
       if name == 'overlay' then
         map(ovr_buf, 'n', '<CR>', [[<cmd>lua require'db.ui'.toggle_node()<CR>]])
