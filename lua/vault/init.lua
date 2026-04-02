@@ -725,6 +725,284 @@ local function render_connection_ui()
   update_focus()
 end
 
+local function render_edit_connection_ui(db_id, current_name, current_type, current_path)
+  -- Focus overlay first (same pattern as render_connection_ui)
+  for id, name in pairs(state.wins) do
+    if name == 'overlay' and api.nvim_win_is_valid(id) then
+      api.nvim_set_current_win(id)
+    end
+  end
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  local width, height = 80, 26
+  local row = math.floor((vim.o.lines - height) / 2)
+  local col = math.floor((vim.o.columns - width) / 2)
+
+  -- Local edit state (mirrors conn_state but isolated)
+  local edit_state = {
+    active_idx = 1,
+    fields = {
+      { name = ' Database Name ', value = current_name, type = 'input',    row = 4,  col = 6, width = 75 },
+      { name = ' Database Type ', value = current_type, type = 'dropdown', row = 8,  col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' } },
+      { name = ' Database Path ', value = current_path, type = 'input',    row = 12, col = 6, width = 70 },
+      { name = 'Browser',         value = '...', type = 'button',          row = 12, col = 78, width = 3 },
+    },
+    wins = {},
+    main_win = nil,
+  }
+
+  edit_state.main_win = vim.api.nvim_open_win(buf, true, {
+    relative = 'win',
+    row = row - 5,
+    col = col,
+    width = width,
+    height = height,
+    style = 'minimal',
+    border = 'rounded',
+    title = ' Edit Connection ',
+    title_pos = 'left',
+    footer = ' (Move <tab>) (Select <enter>) (Save <s>) (Cancel <esc>) ',
+    footer_pos = 'right',
+    zindex = 250,
+  })
+
+  vim.api.nvim_set_option_value('winhl', 'Normal:MyCustomWinBG,FloatBorder:FloatBorder', { win = edit_state.main_win })
+
+  local lines = {
+    '',
+    '   General ',
+    'ㅤ───────────────────────────────────────────────────────────────────────────',
+  }
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+
+  -- Close any old field windows
+  for _, win in pairs(edit_state.wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  edit_state.wins = {}
+
+  -- Local update_focus for edit popup
+  local function update_edit_focus()
+    for i, win in ipairs(edit_state.wins) do
+      if i == edit_state.active_idx then
+        vim.api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        vim.api.nvim_set_current_win(win)
+      else
+        vim.api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+      end
+    end
+  end
+
+  -- Save handler (UPDATE instead of INSERT)
+  local function trigger_update_connection()
+    local function get_field_text(index)
+      local win = edit_state.wins[index]
+      if win and vim.api.nvim_win_is_valid(win) then
+        local fbuf = vim.api.nvim_win_get_buf(win)
+        local flines = vim.api.nvim_buf_get_lines(fbuf, 0, -1, false)
+        return flines[1] or ''
+      end
+      return ''
+    end
+
+    local typed_name = get_field_text(1)
+    local selected_type = get_field_text(2)
+    local typed_path = get_field_text(3)
+
+    -- Validate path
+    if not vim.loop.fs_stat(typed_path) then
+      print('Invalid Path: File does not exist!')
+      return
+    end
+
+    local path = './database.db'
+    local f = io.open(path, 'r')
+    if not f then return end
+    f:close()
+
+    local db = require('sqlite.db'):open(path)
+    local update_query = string.format(
+      [[UPDATE database SET name='%s', type='%s', path='%s' WHERE id='%s';]],
+      typed_name:gsub("'", "''"),
+      selected_type:gsub("'", "''"),
+      typed_path:gsub("'", "''"),
+      db_id:gsub("'", "''")
+    )
+
+    local success, err = pcall(function()
+      db:eval(update_query)
+    end)
+
+    if success then
+      -- Refresh the overlay list
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' then
+          local ovr_buf = vim.api.nvim_win_get_buf(id)
+          api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+          api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+          -- Rebuild entire list from DB to reflect the rename
+          api.nvim_buf_set_lines(ovr_buf, 0, -1, false, {})
+          local result = db:eval('SELECT * FROM database')
+          if type(result) == 'table' then
+            for i, row in ipairs(result) do
+              local line_content = ' ■ ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+              if i == 1 then
+                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
+            end
+          end
+          api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+          break
+        end
+      end
+
+      -- Close edit popup windows
+      for _, win in ipairs(edit_state.wins) do
+        api.nvim_win_close(win, true)
+      end
+      api.nvim_win_close(edit_state.main_win, true)
+
+      -- Return focus to overlay
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and api.nvim_win_is_valid(id) then
+          api.nvim_set_current_win(id)
+        end
+      end
+    else
+      print('Database Error: ' .. tostring(err))
+    end
+
+    db:close()
+  end
+
+  -- Create field windows (same layout as render_connection_ui)
+  for i, field in ipairs(edit_state.fields) do
+    local ibuf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+    local win = vim.api.nvim_open_win(ibuf, false, {
+      relative = 'win',
+      win = edit_state.main_win,
+      row = field.row,
+      col = field.col - 5,
+      width = field.width,
+      height = 1,
+      title = field.name ~= 'Browser' and field.name or nil,
+      style = 'minimal',
+      border = 'rounded',
+      zindex = 260,
+    })
+    edit_state.wins[i] = win
+
+    local bopts = { buffer = ibuf, silent = true }
+
+    vim.keymap.set('n', '<Tab>', function()
+      edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
+      update_edit_focus()
+    end, bopts)
+
+    vim.keymap.set('n', 's', function()
+      trigger_update_connection()
+    end, bopts)
+
+    vim.keymap.set('n', '<CR>', function()
+      if field.type == 'button' then
+        local path_field = edit_state.fields[i - 1]
+        local field_win = edit_state.wins[i - 1]
+        local field_buf = api.nvim_win_get_buf(field_win)
+        require('telescope').extensions.file_browser.file_browser {
+          cwd = vim.fn.expand '$HOME',
+          prompt_title = 'Select Database File',
+          attach_mappings = function(prompt_bufnr, _)
+            vim.schedule(function()
+              local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
+              for _, win_key in ipairs { 'prompt_win', 'results_win', 'preview_win' } do
+                if picker[win_key] and vim.api.nvim_win_is_valid(picker[win_key]) then
+                  vim.api.nvim_win_set_config(picker[win_key], { border = 'rounded', zindex = 400 })
+                end
+              end
+            end)
+            local actions = require 'telescope.actions'
+            local action_state = require 'telescope.actions.state'
+            actions.select_default:replace(function()
+              local selection = action_state.get_selected_entry()
+              actions.close(prompt_bufnr)
+              path_field.value = selection.path
+              api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
+            end)
+            return true
+          end,
+        }
+      elseif field.type == 'dropdown' then
+        show_dropdown_picker(field, edit_state.wins[i])
+      else
+        vim.cmd 'startinsert!'
+      end
+    end, bopts)
+
+    vim.keymap.set('n', '<Esc>', function()
+      for _, win in ipairs(edit_state.wins) do
+        api.nvim_win_close(win, true)
+      end
+      api.nvim_win_close(edit_state.main_win, true)
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and api.nvim_win_is_valid(id) then
+          api.nvim_set_current_win(id)
+          return
+        end
+      end
+    end, bopts)
+  end
+
+  update_edit_focus()
+end
+
+M.edit_db = function()
+  local win = api.nvim_get_current_win()
+  local buf = api.nvim_win_get_buf(win)
+  local cursor_row = api.nvim_win_get_cursor(win)[1]
+  local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
+
+  -- Only allow editing saved connections (not connected tree nodes)
+  if state.is_connected then
+    print('Disconnect first before editing a connection.')
+    return
+  end
+
+  local node_id = line:match '--ID:(%w+)'
+  local db_type = line:match '%[([^%]]+)%]'
+
+  if not node_id or not db_type then
+    print('No connection selected.')
+    return
+  end
+
+  -- Fetch full record from DB
+  local path = './database.db'
+  local f = io.open(path, 'r')
+  if not f then return end
+  f:close()
+
+  local db = require('sqlite.db'):open(path)
+  local result = db:eval(
+    string.format("SELECT name, type, path FROM database WHERE id = '%s';", node_id:gsub("'", "''"))
+  )
+  db:close()
+
+  if not result or #result == 0 then
+    print('Could not find connection with ID: ' .. node_id)
+    return
+  end
+
+  local row = result[1]
+  render_edit_connection_ui(node_id, row.name, row.type, row.path)
+end
+
 -- Add a function you can call externally when a connection is made
 -- M.connect_db = function ()
 local connect_db = function(ovr_buf, db_id)
@@ -921,20 +1199,24 @@ M.disconnect_db = function()
           api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
           api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
-          for _, row in ipairs(result) do
-            -- 1. Get the content of the very first line (index 0 to 1)
-            local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+          if result == true then
+            break
+          else
+            for _, row in ipairs(result) do
+              -- 1. Get the content of the very first line (index 0 to 1)
+              local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
 
-            --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-            local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+              --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+              local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
 
-            -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
-            if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
-              -- Replace the empty first line
-              vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
-            else
-              -- Append a new line at the very end
-              vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+              if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+                -- Replace the empty first line
+                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                -- Append a new line at the very end
+                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
             end
           end
 
@@ -1187,7 +1469,7 @@ local function update_ui_state()
         local win_width = api.nvim_win_get_width(b_win) - 2
 
         -- 2. Your existing text
-        local left_text = 'Connect: <enter> | New: n | Edit: e | Close: m | Delete: d | Refresh: f | Exit: <esc>'
+        local left_text = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Exit: <esc>'
         local right_text = 'Help: ? | Leader: <space>'
 
         -- 3. Calculate spaces needed
@@ -1368,7 +1650,7 @@ local function update_ui_state()
 
     -- Patterns to match: Keys (Soft Orange)
     -- Uses lua patterns to find <...> or single letters after a colon
-    local orange_patterns = { '<enter>', ' n ', '<space>', '?', ' e ', ' m ', ' f ', ' d ', ' i ', ' h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<space>', '?', ' ^e ', ' ^c ', ' ^d ', ' i ', ' h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
@@ -1415,7 +1697,7 @@ local function execute_query()
   -- 2. Execute using sqlite.lua
   -- Ensure you have an active 'db' connection object stored in your state
   local success, result = pcall(function()
-    local path = '/home/yuito/Blue Book/database.db' -- Use your state path
+    local path = state.db_path
     return require('sqlite.db').with_open(path, function(conn)
       -- Record the start time using os.clock()
       local start_time = os.clock()
@@ -1767,14 +2049,18 @@ M.open_db_float = function()
         switch_to_win 'results'
       end, { buffer = b })
       if name == 'overlay' then
-        vim.keymap.set('n', 'n', function()
+        vim.keymap.set('n', '<C-n>', function()
           render_connection_ui()
         end, { buffer = b, noremap = true, silent = true })
+
+        vim.keymap.set('n', '<C-e>', function()
+          M.edit_db()
+        end, { buffer = b, noremap = true, silent = true, desc = 'Edit selected DB connection' })
       end
-      vim.keymap.set('n', 'm', function()
+      vim.keymap.set('n', '<C-c>', function()
         M.disconnect_db()
       end, { buffer = ovr_buf, desc = "Close DB Tree and return to list" })
-      vim.keymap.set('n', 'f', function()
+      vim.keymap.set('n', '<C-d>', function()
         M.delete_db()
       end, { buffer = ovr_buf, desc = "Delete DB Connection and return to list" })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
