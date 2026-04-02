@@ -29,6 +29,7 @@ local state = {
   root_node_id = nil,
   is_connected = false,
   db_type = nil,
+  db_path = nil,
   db_data = {},
   db_types = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' },
   icons = {
@@ -384,7 +385,7 @@ local function render_explorer_tree(buf)
       add_line(display_name, level, is_open, node_data.id)
       if is_open then
         -- Optional static extra line for the path
-        add_line('Path: ./Blue Book/Codes/Test_Projects/db.nvim/examples/demo.db', level + 1, nil, nil)
+        add_line('Path: .' .. state.db_path, level + 1, nil, nil)
       end
     elseif node_data.type == 'folder' then
       -- Folder nodes are collapsible
@@ -520,7 +521,7 @@ local function trigger_save_connection()
             api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
             --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-            local line_content = ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
+            local line_content = '  ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
 
             -- 1. Get the content of the very first line (index 0 to 1)
             local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
@@ -735,7 +736,7 @@ local connect_db = function(ovr_buf, db_id)
     local db = require('sqlite.db'):open(path)
 
     local query = string.format(
-      [[SELECT name, type, path FROM database where id = '%s';]],
+      [[SELECT name, type, path FROM database WHERE id = '%s';]],
       db_id:gsub("'", "''")
     )
 
@@ -745,6 +746,8 @@ local connect_db = function(ovr_buf, db_id)
     local db_path = result[1].path
 
     state.db_data = fetch_dynamic_data(db_path, db_name, db_type, db_id)
+    state.db_path = db_path
+    state.db_type = db_type
     state.is_connected = true
 
     -- Set default open states
@@ -769,6 +772,108 @@ local connect_db = function(ovr_buf, db_id)
   end
 end
 
+M.delete_db = function()
+  local win = api.nvim_get_current_win()
+  local buf = api.nvim_win_get_buf(win)
+
+  api.nvim_buf_set_option(buf, 'modifiable', true)
+  local cursor_row = api.nvim_win_get_cursor(win)[1]
+  local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
+
+  -- Use a pattern match to reliably extract the hidden ID suffix:
+  local node_id = line:match '--ID:(%w+)' -- TODO: important line for later usage
+  local node = line:match '(%w+)'
+  local db_type = line:match '%[([^%]]+)%]'
+
+  for _, word in ipairs(state.db_types) do
+    if state.is_connected == false then
+      if db_type == word then
+        local path = './database.db'
+        local f = io.open(path, 'r')
+
+        if f then
+          f:close()
+          local db = require('sqlite.db'):open(path)
+          local db_id = generate_id()
+
+          local insert_query = string.format(
+            [[DELETE FROM database WHERE id = '%s';]],
+            node_id:gsub("'", "''") -- Escape single quotes to prevent SQL injection
+          )
+
+          local success, err = pcall(function()
+            db:eval(insert_query) -- Replace 'db' with your actual database handler object
+          end)
+
+          if success then
+            print("Successfully deleted connection: (ID:" .. node_id .. ")")
+          elseif not success then
+            print("Database Error: " .. tostring(err))
+          end
+
+          db:close()
+        end
+      end
+    elseif state.is_connected == true then
+      break        --        
+    end
+  end
+
+  render_explorer_tree(buf)
+
+  local path = './database.db'
+  local f = io.open(path, 'r')
+
+  if f then
+    f:close()
+    local db = require('sqlite.db'):open(path)
+    local result = nil
+
+    local success, err = pcall(function()
+      result = db:eval("SELECT * from database") -- Replace 'db' with your actual database handler object
+    end)
+
+    if success then
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' then
+          local ovr_buf = vim.api.nvim_win_get_buf(id)
+          api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+          api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+
+          if result == true then
+            break
+          else
+            for _, row in ipairs(result) do
+              -- 1. Get the content of the very first line (index 0 to 1)
+              local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+
+              --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+              local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+
+              -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+              if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+                -- Replace the empty first line
+                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                -- Append a new line at the very end
+                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
+            end
+          end
+
+          break
+        end
+      end
+    elseif not success then
+      print("Database Error: " .. tostring(err))
+    end
+
+    db:close()
+  end
+
+  api.nvim_buf_set_option(buf, 'modifiable', false)
+end
+
 -- New function to close the active DB tree and return to the saved list
 M.disconnect_db = function()
   local ovr_win, ovr_buf = nil, nil
@@ -785,6 +890,8 @@ M.disconnect_db = function()
   state.is_connected = false
   state.root_node_id = nil
   state.db_data = {} -- Clear the temporary schema data
+  state.db_path = nil
+  state.db_type = nil
     
   -- 2. Clean UI
   api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
@@ -1068,7 +1175,7 @@ local function update_ui_state()
         api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
 
         if state.is_connected == true then
-          connection_status = 'Connected to SQLite'
+          connection_status = 'Connected to ' .. state.db_type
         elseif state.is_connected == false then
           connection_status = 'Not Connected'
         end
@@ -1108,7 +1215,7 @@ local function update_ui_state()
       api.nvim_win_set_option(q_ovr_win, 'cursorline', true)
       if b_buf then
         if state.is_connected == true then
-          connection_status = ' Connected to SQLite' --  TODO: add state.db_type logic later
+          connection_status = ' Connected to ' .. state.db_type
         elseif state.is_connected == false then
           connection_status = ' Not Connected'
         end
@@ -1118,7 +1225,7 @@ local function update_ui_state()
         --local status_msg = state.last_query_status ~= '' and (' | ' .. state.last_query_status) or ''
 
         -- Left side content
-        local left_status = mode_text .. (state.is_connected and ' Connected to SQLite' or ' Not Connected')
+        local left_status = mode_text .. (state.is_connected and ' Connected to ' .. state.db_type or ' Not Connected')
         -- Right side content (The Query Result)
         local formatted_time = os.date '[%H:%M:%S]'
         local right_status -- Declare it here first
@@ -1196,7 +1303,7 @@ local function update_ui_state()
         api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
 
         if state.is_connected == true then
-          connection_status = 'Connected to SQLite' --  TODO: add state.db_type logic later
+          connection_status = 'Connected to ' .. state.db_type
         elseif state.is_connected == false then
           connection_status = 'Not Connected'
         end
@@ -1586,20 +1693,24 @@ M.open_db_float = function()
           api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
           api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
-          for _, row in ipairs(result) do
-            -- 1. Get the content of the very first line (index 0 to 1)
-            local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+          if result == true then
+            break
+          else
+            for _, row in ipairs(result) do
+              -- 1. Get the content of the very first line (index 0 to 1)
+              local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
 
-            --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-            local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+              --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+              local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
 
-            -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
-            if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
-              -- Replace the empty first line
-              vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
-            else
-              -- Append a new line at the very end
-              vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+              if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+                -- Replace the empty first line
+                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                -- Append a new line at the very end
+                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
             end
           end
 
@@ -1663,6 +1774,9 @@ M.open_db_float = function()
       vim.keymap.set('n', 'm', function()
         M.disconnect_db()
       end, { buffer = ovr_buf, desc = "Close DB Tree and return to list" })
+      vim.keymap.set('n', 'f', function()
+        M.delete_db()
+      end, { buffer = ovr_buf, desc = "Delete DB Connection and return to list" })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
       if name == 'overlay' then
         map(ovr_buf, 'n', '<CR>', [[<cmd>lua require'db.ui'.toggle_node()<CR>]])
