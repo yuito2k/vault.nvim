@@ -4,6 +4,8 @@ local M = {}
 local state = {
   wins = {},
   parent_win_id = nil,
+  tree_highlights = {},  -- populated by render_explorer_tree
+  tree_line_map = {},
   ns = api.nvim_create_namespace 'DbUI_NS',
   overlay_ns = api.nvim_create_namespace 'ExplorerOverlayNS',
   q_overlay_ns = api.nvim_create_namespace 'QueryOverlayNS',
@@ -34,8 +36,8 @@ local state = {
   db_types = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' },
   icons = {
     db = '⌘',
-    folder_open = '',
-    folder_closed = '',
+    folder_open = '▼',
+    folder_closed = '▶',
     table = '',
     field = '',
   },
@@ -105,6 +107,9 @@ local function setup_highlight_groups()
   api.nvim_set_hl(0, state.hl_cell_cursor, { bg = '#CBDAD4', fg = '#282a36', bold = true })
   api.nvim_set_hl(0, 'DbWinNormalBG', { fg = '#6272A4', bg = 'NONE' })
   -- DB tree config
+  -- background-only: no fg so icon colours can show through
+  api.nvim_set_hl(0, 'ExplorerLineActiveBG', { bg = '#3d4555' })
+  -- text colour for the label part only
   api.nvim_set_hl(0, 'ExplorerLineActive', { fg = '#F1FA8C', bg = '#44475A', bold = true }) -- Active line text color
   api.nvim_set_hl(0, 'ExplorerLineInactive', { fg = '#BD93F9', bg = 'NONE' }) -- Inactive line text color
   -- Define soft red for labels
@@ -113,66 +118,188 @@ local function setup_highlight_groups()
   api.nvim_set_hl(0, 'SoftOrangeKey', { fg = '#d19a66' })
   api.nvim_set_hl(0, 'DbTimeGray', { fg = '#6272A4' }) -- A nice "Dracula" style muted gray/blue unimplemented for the bottom bar time color
   api.nvim_set_hl(0, 'MyCustomWinBG', { bg = '#1c1c23', fg = '#cdd6f4' }) -- for the new connection pop up
+  -- Explorer tree
+  api.nvim_set_hl(0, 'ExplorerConnector',  { fg = '#6272A4' })
+  api.nvim_set_hl(0, 'ExplorerIconDB',     { fg = '#FFB86C', bold = true })
+  api.nvim_set_hl(0, 'ExplorerIconOpen',   { fg = '#8BE9FD' })
+  api.nvim_set_hl(0, 'ExplorerIconClosed', { fg = '#BD93F9' })
+  api.nvim_set_hl(0, 'ExplorerIconField',  { fg = '#6272A4' })
+  api.nvim_set_hl(0, 'ExplorerFolder',     { fg = '#8BE9FD', bold = true })
+  api.nvim_set_hl(0, 'ExplorerTable',      { fg = '#F1FA8C' })
+  api.nvim_set_hl(0, 'ExplorerField',      { fg = '#6272A4' })
+  api.nvim_set_hl(0, 'ExplorerEmpty',      { fg = '#53566b', italic = true })
+  -- Explorer tree highlights
+  api.nvim_set_hl(0, 'ExplorerConnectorActive', { fg = '#BD93F9' })  -- add this line
+  api.nvim_set_hl(0, 'ExplorerFieldName', { fg = '#F8F8F2', bold = true })
+  api.nvim_set_hl(0, 'ExplorerFieldType', { fg = '#6272A4', italic = true })
 end
 
 -- 2. Autocomplete Engine Logic
-local function close_suggestions()
-  if state.suggest_win and api.nvim_win_is_valid(state.suggest_win) then
-    api.nvim_win_close(state.suggest_win, true)
-  end
-  state.suggest_win = nil
+local suggest_state = {
+  win = nil,
+  buf = nil,
+  items = {},       -- filtered keyword list
+  selected = 1,     -- 1-based index of highlighted item
+}
+
+local function suggest_is_open()
+  return suggest_state.win ~= nil
+    and api.nvim_win_is_valid(suggest_state.win)
 end
 
-local function confirm_suggestion(q_ovr_win)
-  if #state.suggestions == 0 then
+local function suggest_close()
+  if suggest_is_open() then
+    api.nvim_win_close(suggest_state.win, true)
+  end
+  -- also wipe the buffer to avoid ghost content on re-open
+  if suggest_state.buf ~= nil and api.nvim_buf_is_valid(suggest_state.buf) then
+    api.nvim_buf_delete(suggest_state.buf, { force = true })
+  end
+  suggest_state.win      = nil
+  suggest_state.buf      = nil
+  suggest_state.items    = {}
+  suggest_state.selected = 1
+end
+
+-- highlight the currently selected row inside the suggestion window
+local function suggest_refresh_highlight()
+  if not suggest_is_open() then return end
+  local ns = api.nvim_create_namespace 'SuggestHL'
+  api.nvim_buf_clear_namespace(suggest_state.buf, ns, 0, -1)
+  -- selected is 1-based, nvim highlight is 0-based
+  api.nvim_buf_add_highlight(
+    suggest_state.buf, ns, 'PmenuSel',
+    suggest_state.selected - 1, 0, -1
+  )
+end
+
+-- move selection up/down, wraps around
+local function suggest_move(dir)
+  if not suggest_is_open() then return end
+  local count = #suggest_state.items
+  suggest_state.selected = ((suggest_state.selected - 1 + dir) % count) + 1
+  suggest_refresh_highlight()
+end
+
+-- open or reuse the floating window and populate it
+local function suggest_open_or_update(q_ovr_win)
+  local items  = suggest_state.items
+  local height = math.min(#items, 8)
+  local width  = 24
+
+  -- derive position from cursor
+  local cursor_screen = api.nvim_win_get_cursor(q_ovr_win)
+  -- place window just below the current line, at column 0
+  local win_row = cursor_screen[1]   -- 1-based line → used as 0-based row offset below cursor
+  local win_col = cursor_screen[2]
+
+  if not suggest_is_open() then
+    suggest_state.buf = api.nvim_create_buf(false, true)
+    suggest_state.win = api.nvim_open_win(suggest_state.buf, false, {
+      relative  = 'win',
+      win       = q_ovr_win,
+      row       = win_row,      -- appears one line below cursor
+      col       = win_col,
+      width     = width,
+      height    = height,
+      style     = 'minimal',
+      border    = 'rounded',
+      focusable = false,
+      zindex    = 200,
+    })
+    -- style: match Dracula palette used elsewhere in the plugin
+    api.nvim_set_hl(0, 'SuggestNormal', { bg = '#282a36', fg = '#f8f8f2' })
+    api.nvim_win_set_option(suggest_state.win, 'winhl', 'Normal:SuggestNormal,FloatBorder:FloatBorderInactive')
+  else
+    -- just resize/reposition in place
+    api.nvim_win_set_config(suggest_state.win, {
+      relative = 'win',
+      win      = q_ovr_win,
+      row      = win_row,
+      col      = win_col,
+      width    = width,
+      height   = height,
+    })
+  end
+
+  api.nvim_buf_set_option(suggest_state.buf, 'modifiable', true)
+  api.nvim_buf_set_lines(suggest_state.buf, 0, -1, false, items)
+  api.nvim_buf_set_option(suggest_state.buf, 'modifiable', false)
+
+  suggest_refresh_highlight()
+end
+
+-- called from TextChangedI — computes matches and shows/hides the window
+local function suggest_update(q_ovr_win)
+  if not api.nvim_win_is_valid(q_ovr_win) then
+    suggest_close()
     return
   end
-  local word = state.suggestions[1] -- Select first match
-  local cursor = api.nvim_win_get_cursor(q_ovr_win)
-  local line = api.nvim_get_current_line()
-  local before = line:sub(1, cursor[2]):gsub('[%w_]+$', '')
-  local after = line:sub(cursor[2] + 1)
-  api.nvim_set_current_line(before .. word .. after)
-  api.nvim_win_set_cursor(q_ovr_win, { cursor[1], #before + #word })
-  close_suggestions()
-end
 
-local function show_suggestions(q_ovr_win)
   local cursor = api.nvim_win_get_cursor(q_ovr_win)
-  local line = api.nvim_get_current_line()
-  local before_cursor = line:sub(1, cursor[2])
-  local current_word = before_cursor:match '[%w_]+$'
+  local line   = api.nvim_get_current_line()
+  -- grab the word fragment immediately before the cursor
+  local before       = line:sub(1, cursor[2])
+  local word_fragment = before:match '[%a_][%w_]*$'  -- must start with a letter
 
-  if not current_word or #current_word < 1 then
-    return close_suggestions()
+  if not word_fragment or #word_fragment < 1 then
+    suggest_close()
+    return
   end
 
-  state.suggestions = {}
-  for _, k in ipairs(sql_keywords) do
-    if k:lower():find('^' .. current_word:lower()) then
-      table.insert(state.suggestions, k)
+  -- filter keywords: case-insensitive prefix match
+  local fragment_upper = word_fragment:upper()
+  local matched = {}
+  for _, kw in ipairs(sql_keywords) do
+    -- vim.startswith is not available in all nvim versions, use plain find
+    if kw:sub(1, #fragment_upper) == fragment_upper then
+      table.insert(matched, kw)
     end
   end
 
-  if #state.suggestions == 0 then
-    return close_suggestions()
+  if #matched == 0 then
+    suggest_close()
+    return
   end
 
-  if not state.suggest_win or not api.nvim_win_is_valid(state.suggest_win) then
-    state.suggest_buf = api.nvim_create_buf(false, true)
-    state.suggest_win = api.nvim_open_win(state.suggest_buf, false, {
-      relative = 'cursor',
-      row = 1,
-      col = 0,
-      width = 20,
-      height = math.min(#state.suggestions, 5),
-      style = 'minimal',
-      border = 'single',
-      focusable = false,
-      zindex = 150,
-    })
+  -- reset selection only when the item list actually changed
+  local list_changed = (#matched ~= #suggest_state.items)
+  if not list_changed then
+    for i, v in ipairs(matched) do
+      if v ~= suggest_state.items[i] then
+        list_changed = true
+        break
+      end
+    end
   end
-  api.nvim_buf_set_lines(state.suggest_buf, 0, -1, false, state.suggestions)
+
+  suggest_state.items = matched
+  if list_changed then
+    suggest_state.selected = 1
+  end
+
+  suggest_open_or_update(q_ovr_win)
+end
+
+-- confirm: replaces the current word fragment with the selected suggestion
+local function suggest_confirm(q_ovr_win)
+  if not suggest_is_open() or #suggest_state.items == 0 then
+    return false   -- caller can decide to insert a real Tab
+  end
+
+  local word   = suggest_state.items[suggest_state.selected]
+  local cursor = api.nvim_win_get_cursor(q_ovr_win)
+  local line   = api.nvim_get_current_line()
+
+  -- replace only the trailing word fragment, keep everything else
+  local before_fragment = line:sub(1, cursor[2]):gsub('[%a_][%w_]*$', '')
+  local after_cursor    = line:sub(cursor[2] + 1)
+
+  api.nvim_set_current_line(before_fragment .. word .. after_cursor)
+  api.nvim_win_set_cursor(q_ovr_win, { cursor[1], #before_fragment + #word })
+
+  suggest_close()
+  return true
 end
 
 -- 3. Scrollbar Logic
@@ -240,14 +367,15 @@ local function render_results_table(buf, data)
   state.table_cols = {}
   for i, h in ipairs(data.headers) do
     table.insert(state.table_cols, #header_str)
-    header_str = header_str .. h .. string.rep(' ', widths[i] - #h)
+    local padded = ' ' .. h:upper()           -- leading space + capitalize
+    header_str = header_str .. padded .. string.rep(' ', widths[i] - #padded)
   end
 
   local row_lines = {}
   for _, row in ipairs(data.rows) do
     local line = ''
     for i, val in ipairs(row) do
-      local s = tostring(val or '')
+      local s = ' ' .. tostring(val or '')    -- leading space
       -- Use string.rep to pad each cell to the calculated width
       line = line .. s .. string.rep(' ', widths[i] - #s)
     end
@@ -293,7 +421,7 @@ local function fetch_dynamic_data(db_path, db_name, db_type, db_id)
     },
     ['Tables'] = { name = 'Tables', type = 'folder', children = {} },
     ['Views'] = { name = 'Views', type = 'folder', children = {} },
-    ['Indexes'] = { name = 'Indexes', type = 'folder', children = {} },
+    ['Indexes'] = { name = 'Indexes', type = 'folder',children = {} },
     ['Triggers'] = { name = 'Triggers', type = 'folder', children = {} },
   }
 
@@ -324,6 +452,11 @@ local function fetch_dynamic_data(db_path, db_name, db_type, db_id)
           type = 'table',
           children = field_children,
         }
+
+        -- initialize so is_open is false (not nil) from the first render
+        if state.open_nodes[obj.name] == nil then
+          state.open_nodes[obj.name] = false
+        end
       else
         -- Views/Indexes/Triggers usually don't have children in this UI
         state.db_data[obj.name] = { name = obj.name, type = obj.type, children = {} }
@@ -337,81 +470,178 @@ end
 
 local function render_explorer_tree(buf)
   local lines = {}
+  local highlights = {}  -- { line_idx (0-based), col_start, col_end, hl_group }
+  state.tree_line_map = {}  -- ← add this
   api.nvim_buf_set_option(buf, 'buftype', 'nofile')
   api.nvim_buf_set_option(buf, 'modifiable', true)
 
-  local function add_line(text, level, is_open, node_id)
-    local indent = string.rep('  ', level)
+  -- Track which levels still have more siblings coming (for │ connectors)
+  -- prefix_stack[level] = true means that level still has items below
+  local function build_prefix(level, is_last, prefix_stack)
+    local prefix = ''
+    for i = 1, level - 1 do
+      if prefix_stack[i] then
+        prefix = prefix .. '│  '
+      else
+        prefix = prefix .. '   '
+      end
+    end
+    if level > 0 then
+      prefix = prefix .. (is_last and '└ ' or '├ ')
+    end
+    return prefix
+  end
+
+  local function add_node_line(text, level, is_last, prefix_stack, node_type, is_open, node_id, nodeData)
+    local prefix = build_prefix(level, is_last, prefix_stack)
+
     local icon = ''
-    if is_open ~= nil then -- Collapsible node (folder/db)
-      icon = is_open and state.icons.folder_open or state.icons.folder_closed
-    else -- Leaf node (field)
-      icon = state.icons.field -- Or state.icons.table if you want a different icon
+    if node_type == 'db' then
+      icon = (is_open and '▼' or '▶') .. '  '  -- collapsible + star
+    elseif node_type == 'folder' or node_type == 'table' then
+      icon = (is_open and '▼ ' or '▶ ')
+    elseif node_type == 'field' then
+      icon = ' '
+    elseif node_type == 'path' then
+      icon = '🖿 '
+    elseif not nodeData.children then -- empty logic
+      icon = ''
     end
 
-    for _, word in pairs(state.db_types) do
-      local s, e = text:find(word)
+    local line_nr = #lines
 
-      if s then
-        --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (generate_id() or ''))
-        table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. node_id)
+    -- for field nodes: split "name TYPE" into two styled segments
+    if node_type == 'field' then
+      local fname, ftype = text:match '^([^%s]+)%s+(.+)$'
+      if fname and ftype then
+        table.insert(lines, prefix .. icon .. fname .. ' ' .. ftype:upper())
+        -- connector
+        table.insert(highlights, { line_nr, 0, #prefix, 'ExplorerConnector' })
+        -- icon (dash)
+        table.insert(highlights, { line_nr, #prefix, #prefix + #icon, 'ExplorerIconField' })
+        -- field name: bold
+        local name_start = #prefix + #icon
+        local name_end   = name_start + #fname
+        table.insert(highlights, { line_nr, name_start, name_end, 'ExplorerFieldName' })
+        -- field type: italic dim
+        local type_start = name_end + 1  -- +1 for the space
+        table.insert(highlights, { line_nr, type_start, -1, 'ExplorerFieldType' })
         return
       end
     end
 
-    table.insert(lines, indent .. icon .. ' ' .. text)
+    -- for path nodes: split "name TYPE" into two styled segments
+    if node_type == 'path' then
+      local fname, ftype = text:match '^([^%s]+)%s+(.+)$'
+      if fname and ftype then
+        table.insert(lines, prefix .. icon .. fname .. ' ' .. ftype:upper())
+        -- connector
+        table.insert(highlights, { line_nr, 0, #prefix, 'ExplorerConnector' })
+        -- icon (dash)
+        table.insert(highlights, { line_nr, #prefix, #prefix + #icon, 'ExplorerIconField' })
+        -- field name: bold
+        local name_start = #prefix + #icon
+        local name_end   = name_start + #fname
+        table.insert(highlights, { line_nr, name_start, name_end, 'ExplorerFieldName' })
+        -- field type: italic dim
+        local type_start = name_end + 1  -- +1 for the space
+        table.insert(highlights, { line_nr, type_start, -1, 'ExplorerFieldType' })
+        return
+      end
+    end
 
-    -- Store the node_id in the line for later extraction by toggle_node/switch_to_win
-    --table.insert(lines, indent .. icon .. ' ' .. text .. ' --ID:' .. (node_id or ''))
-    --table.insert(lines, indent .. icon .. ' ' .. text)
+    table.insert(lines, prefix .. icon .. text)
+
+    -- connector highlight
+    if #prefix > 0 then
+      table.insert(highlights, { line_nr, 0, #prefix, 'ExplorerConnector' })
+    end
+
+    local icon_start = #prefix
+    local icon_end   = icon_start + #icon
+
+    if node_type == 'db' then
+      -- ▼/► in one color, * in another
+      local arrow_end = icon_start + 2  -- '▼ ' or '► ' = 2 bytes (arrow + space... but ▼ is multibyte)
+      -- safer: highlight the whole icon as one, then text
+      table.insert(highlights, { line_nr, icon_start, icon_end, 'ExplorerIconDB' })
+      table.insert(highlights, { line_nr, icon_end,   -1,       'ExplorerLineInactive' })
+    elseif node_type == 'folder' then
+      table.insert(highlights, { line_nr, icon_start, icon_end, is_open and 'ExplorerIconOpen' or 'ExplorerIconClosed' })
+      table.insert(highlights, { line_nr, icon_end,   -1,       'ExplorerFolder' })
+    elseif node_type == 'table' then
+      table.insert(highlights, { line_nr, icon_start, icon_end, is_open and 'ExplorerIconOpen' or 'ExplorerIconClosed' })
+      table.insert(highlights, { line_nr, icon_end,   -1,       'ExplorerTable' })
+    elseif node_type == 'path' then
+      table.insert(highlights, { line_nr, icon_start, icon_end, 'ExplorerConnector' })
+    elseif not nodeData.children then
+      table.insert(highlights, { line_nr, 0, -1, 'ExplorerEmpty' })
+    end
   end
 
   -- THE RECURSIVE DRAW LOGIC
-  local function draw_node(node_id, level)
+  local function draw_node(node_id, level, is_last, prefix_stack)
     local node_data = state.db_data[node_id]
+    if node_data == nil then return end
 
-    -- Safeguard against missing data (fixes the previous error)
-    if node_data == nil then
-      --print('Error: Missing node data for ID: ' .. tostring(node_id))
-      return
-    end
+    -- record which line this node is on BEFORE adding lines
+    local my_line_nr = #lines  -- 0-based, since lines is 0-indexed after insert
+    state.tree_line_map[my_line_nr] = node_id  -- ← add this
 
-    local is_open = state.open_nodes[node_id]
-    local display_name = node_data.name
+    local is_open    = state.open_nodes[node_id]
+    local display    = node_data.name
 
-    -- Handle different display types and add the current line
+    -- update prefix_stack: current level has more siblings if not last
+    local new_stack = {}
+    for k, v in pairs(prefix_stack) do new_stack[k] = v end
+    new_stack[level] = not is_last
+
+    -- draw the node itself
     if node_data.type == 'db' then
-      -- DB node is always collapsible
-      add_line(display_name, level, is_open, node_data.id)
+      add_node_line(display, level, is_last, new_stack, 'db', is_open, node_data.id, node_data)
       if is_open then
-        -- Optional static extra line for the path
-        add_line('Path: .' .. state.db_path, level + 1, nil, nil)
+        add_node_line('Path: ' .. (state.db_path or ''), level + 1, false, new_stack, 'path', nil, nil, node_data)
       end
     elseif node_data.type == 'folder' then
-      -- Folder nodes are collapsible
-      add_line(display_name, level, is_open, node_id)
+      add_node_line(display, level, is_last, new_stack, 'folder', is_open, node_id, node_data)
     elseif node_data.type == 'table' then
-      -- Table nodes are collapsible
-      add_line(display_name, level, nil, node_id)
-    else -- 'field' type (leaf node)
-      add_line(display_name, level, nil, node_id)
+      add_node_line(display, level, is_last, new_stack, 'table', is_open, node_id, node_data)
+    else
+      add_node_line(display, level, is_last, new_stack, 'field', nil, node_id, node_data)
     end
 
-    -- Recursively draw children if the node is open and has children
-    if is_open and node_data.children and #node_data.children > 0 then
-      for _, child_id in ipairs(node_data.children) do
-        draw_node(child_id, level + 1)
+    -- draw children if open
+    if is_open and node_data.children then
+      local children = node_data.children
+      if #children == 0 then
+        -- empty placeholder
+        local empty_prefix = build_prefix(level + 1, true, new_stack)
+        local line_nr = #lines
+        table.insert(lines, empty_prefix .. '(empty)')
+        table.insert(highlights, { line_nr, 0, #empty_prefix, 'ExplorerConnector' })  -- was ExplorerEmpty
+        table.insert(highlights, { line_nr, #empty_prefix, -1, 'ExplorerEmpty' })
+        state.tree_line_map[line_nr] = node_id .. '__empty__'  -- ← add this
+      else
+        for i, child_id in ipairs(children) do
+          local child_is_last = (i == #children)
+          draw_node(child_id, level + 1, child_is_last, new_stack)
+        end
       end
     end
   end
 
-  -- Start the drawing process from the root node
-  -- DYNAMIC FIX: Use the connected DB name or a default fallback
   local root_id = state.root_node_id or 'MyDatabase'
-  draw_node(root_id, 0)
+  draw_node(root_id, 0, true, {})
 
-  -- Finally, update the Neovim buffer
   api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+  api.nvim_buf_clear_namespace(buf, state.ns, 0, -1)
+  for _, hl in ipairs(highlights) do
+    api.nvim_buf_add_highlight(buf, state.ns, hl[4], hl[1], hl[2], hl[3])
+  end
+
+  state.tree_highlights = highlights  -- save here, once, after all nodes are done
+
   api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
@@ -457,7 +687,7 @@ local conn_state = {
   active_idx = 1,
   fields = {
     { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
-    { name = ' Database Type ', value = 'SQLite', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL' } },
+    { name = ' Database Type ', value = 'SQLite', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
     { name = ' Database Path ', value = '/path/to/db.db', type = 'input', row = 12, col = 6, width = 70 },
     { name = 'Browser', value = '...', type = 'button', row = 12, col = 78, width = 3 },
   },
@@ -1041,7 +1271,13 @@ local connect_db = function(ovr_buf, db_id)
 
     for _, child_id in ipairs(state.db_data[db_name].children) do
       if state.db_data[child_id].type == 'folder' then
-        state.open_nodes[child_id] = false -- Auto-expand all top-level folders if true
+        state.open_nodes[child_id] = false
+        -- initialize all tables inside this folder
+        for _, table_id in ipairs(state.db_data[child_id].children) do
+          if state.db_data[table_id] and state.db_data[table_id].type == 'table' then
+            state.open_nodes[table_id] = false
+          end
+        end
       end
     end
 
@@ -1058,10 +1294,20 @@ M.delete_db = function()
   local cursor_row = api.nvim_win_get_cursor(win)[1]
   local line = api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1]
 
+  if state.is_connected then
+    print('Disconnect first before deleting a connection.')
+    return
+  end
+
   -- Use a pattern match to reliably extract the hidden ID suffix:
   local node_id = line:match '--ID:(%w+)' -- TODO: important line for later usage
   local node = line:match '(%w+)'
   local db_type = line:match '%[([^%]]+)%]'
+
+  if not node_id or not db_type then
+    print('No connection selected.')
+    return
+  end
 
   for _, word in ipairs(state.db_types) do
     if state.is_connected == false then
@@ -1154,6 +1400,12 @@ end
 
 -- New function to close the active DB tree and return to the saved list
 M.disconnect_db = function()
+  -- Only allow editing saved connections (not connected tree nodes)
+  if not state.is_connected then
+    print("You aren't connected to any database at the moment.")
+    return
+  end
+
   local ovr_win, ovr_buf = nil, nil
   for id, name in pairs(state.wins) do
       if name == 'overlay' then
@@ -1278,8 +1530,356 @@ M.toggle_node = function()
   api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
--- 4. Main Focus and Bottom Bar Handler
 local function update_ui_state()
+  local exp_win, ovr_win, ovr_buf, q_ovr_buf, r_ovr_buf, ovr_scroll_buf, b_buf = nil, nil, nil, nil, nil, nil, nil
+  for id, name in pairs(state.wins) do
+    if name == 'explorer' then
+      exp_win = id
+    end
+    if name == 'overlay' then
+      ovr_win = id
+      ovr_buf = api.nvim_win_get_buf(id)
+    end
+    if name == 'overlay_scroll' then
+      ovr_scroll_buf = api.nvim_win_get_buf(id)
+    end
+    if name == 'query' then
+      q_win = id
+    end
+    if name == 'q_overlay' then
+      q_ovr_win = id
+      q_ovr_buf = api.nvim_win_get_buf(id)
+    end
+    if name == 'results' then
+      r_win = id
+    end
+    if name == 'r_overlay' then
+      r_ovr_win = id
+      r_ovr_buf = api.nvim_win_get_buf(id)
+    end
+    if name == 'bottom_bar' then
+      b_win = id
+      b_buf = api.nvim_win_get_buf(id)
+    end
+  end
+
+  api.nvim_win_set_option(exp_win, 'number', false)
+  api.nvim_win_set_option(exp_win, 'relativenumber', false)
+
+  api.nvim_win_set_option(q_win, 'number', false)
+  api.nvim_win_set_option(q_win, 'relativenumber', false)
+
+  api.nvim_win_set_option(r_win, 'number', false)
+  api.nvim_win_set_option(r_win, 'relativenumber', false)
+
+  api.nvim_win_set_option(b_win, 'number', false)
+  api.nvim_win_set_option(b_win, 'relativenumber', false)
+
+  api.nvim_win_set_option(exp_win, 'cursorline', false)
+  api.nvim_win_set_option(b_win, 'cursorline', false)
+
+  local curr = api.nvim_get_current_win()
+  if curr == exp_win and ovr_win then
+    api.nvim_set_current_win(ovr_win)
+    curr = ovr_win
+  end
+  if curr == q_win and q_ovr_win then
+    api.nvim_set_current_win(q_ovr_win)
+    curr = q_ovr_win
+  end
+  if curr == r_win and r_ovr_win then
+    api.nvim_set_current_win(r_ovr_win)
+    curr = r_ovr_win
+  end
+
+  local is_ovr_active = (curr == ovr_win)
+  local is_q_ovr_active = (curr == q_ovr_win)
+  local is_r_ovr_active = (curr == r_ovr_win)
+  local is_insert = api.nvim_get_mode().mode == 'i'
+
+  -- ─── Explorer / Overlay highlighting (ONE clear, everything in one block) ───
+  if ovr_buf and api.nvim_buf_is_valid(ovr_buf) then
+    api.nvim_buf_clear_namespace(ovr_buf, state.overlay_ns, 0, -1)
+
+    if is_ovr_active then
+      local cursor_row = api.nvim_win_get_cursor(ovr_win)[1]
+      local cursor_line_0 = cursor_row - 1
+      local lines_to_highlight = { [cursor_line_0] = true }
+      local cursor_node_id = state.tree_line_map and state.tree_line_map[cursor_line_0]
+
+      if cursor_node_id and not cursor_node_id:find('__empty__') then
+        local function collect_child_lines(node_id)
+          local node = state.db_data[node_id]
+
+          if not node or not node.children then return end
+          if not state.open_nodes[node_id] then
+            -- Node is closed — but it still renders an (Empty) placeholder
+            -- if its children list is empty. Collect that line too.
+            if #node.children == 0 then
+                for line_nr, nid in pairs(state.tree_line_map) do
+                    if nid == node_id .. '__empty__' then
+                        lines_to_highlight[line_nr] = true
+                    end
+                end
+            end
+            return
+          end
+        
+          if #node.children == 0 then
+            -- find the (Empty) line tied to this specific node
+            for line_nr, nid in pairs(state.tree_line_map) do
+              if nid == node_id .. '__empty__' then
+                lines_to_highlight[line_nr] = true
+              end
+            end
+            return
+          end
+        
+          for _, child_id in ipairs(node.children) do
+            for line_nr, nid in pairs(state.tree_line_map) do
+              if nid == child_id then
+                lines_to_highlight[line_nr] = true
+                collect_child_lines(child_id)
+                break
+              end
+            end
+          end
+        end
+        collect_child_lines(cursor_node_id)
+      end
+    
+      -- paint cursor line with full background + icon re-stamp + active text
+      --api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerLineActiveBG', cursor_line_0, 0, -1)
+    
+      local text_start = 0
+      for _, hl in ipairs(state.tree_highlights or {}) do
+        if hl[1] == cursor_line_0 then
+          api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, hl[4], hl[1], hl[2], hl[3])
+          if hl[3] == -1 then text_start = hl[2] end
+        end
+      end
+      local cursor_line_text = api.nvim_buf_get_lines(ovr_buf, cursor_line_0, cursor_line_0 + 1, false)[1] or ''
+      api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerLineActive', cursor_line_0, text_start, #cursor_line_text)
+
+      -- snap cursor to text start
+      api.nvim_win_set_cursor(ovr_win, { cursor_row, text_start })
+    
+      -- paint child lines: connector fg only
+      for line_nr, _ in pairs(lines_to_highlight) do
+        if line_nr ~= cursor_line_0 then
+          for _, hl in ipairs(state.tree_highlights or {}) do
+            if hl[1] == line_nr then
+              if hl[4] == 'ExplorerConnector' then
+                if cursor_line_0 == 0 then
+                  api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2], hl[3])
+                  api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', 1, hl[2], hl[3])
+                else
+                  api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2]+1, hl[3])
+                end
+              elseif hl[4] == 'ExplorerEmpty' then
+                api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerEmpty', line_nr, hl[2], hl[3])
+              end
+            end
+          end
+        end
+      end
+    
+      api.nvim_win_set_option(ovr_win, 'winhl', 'Normal:' .. state.hl_overlay_active)
+    
+      if b_buf then
+        api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
+        connection_status = state.is_connected and ('Connected to ' .. state.db_type) or 'Not Connected'
+        api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
+      
+        local win_width  = api.nvim_win_get_width(b_win) - 2
+        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Exit: <esc>'
+        local right_text = 'Help: ^? | Leader: <space>'
+        local space_count = win_width - #left_text - #right_text - 1
+      
+        if space_count > 0 then
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. string.rep(' ', space_count) .. right_text })
+        else
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. ' ' .. right_text })
+        end
+      end
+    
+    else
+      api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, state.hl_first_line_text, 0, 4, -1)
+      api.nvim_win_set_option(ovr_win, 'winhl', 'Normal:Normal')
+    end
+  end
+
+  -- ─── Results: header protection + cell cursor ───────────────────────────────
+  if curr == r_ovr_win then
+    local cursor = api.nvim_win_get_cursor(r_ovr_win)
+    if cursor[1] == 1 then
+      api.nvim_win_set_cursor(r_ovr_win, { 2, cursor[2] })
+      cursor = api.nvim_win_get_cursor(r_ovr_win)
+    end
+
+    local buf = api.nvim_win_get_buf(r_ovr_win)
+    apply_table_highlights(buf)
+
+    local start_col = 0
+    for _, offset in ipairs(state.table_cols) do
+      if cursor[2] >= offset then
+        start_col = offset
+      end
+    end
+
+    local next_offset = -1
+    for _, offset in ipairs(state.table_cols) do
+      if offset > start_col then
+        next_offset = offset
+        break
+      end
+    end
+
+    api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
+  end
+
+  -- ─── Borders & Titles ────────────────────────────────────────────────────────
+  for win_id, name in pairs(state.wins) do
+    if api.nvim_win_is_valid(win_id) and not name:find 'scroll' and name ~= 'overlay' and name ~= 'bottom_bar' then
+      local active = (curr == win_id)
+        or (name == 'explorer'  and is_ovr_active)
+        or (name == 'query'     and is_q_ovr_active)
+        or (name == 'results'   and is_r_ovr_active)
+      local title_hl = active and 'FloatTitleActive' or 'FloatTitleInactive'
+
+      api.nvim_win_set_option(
+        win_id, 'winhl',
+        'Normal:Normal,FloatBorder:' .. (active and state.hl_active_border or state.hl_inactive_border)
+          .. ',FloatTitle:' .. title_hl
+      )
+
+      local title_text = ({ explorer = ' [e] Explorer ', query = ' [q] Query ', results = ' [r] Results ' })[name] or ''
+      api.nvim_win_set_config(win_id, { title = title_text, title_pos = 'left' })
+    end
+  end
+
+  -- ─── Query overlay ───────────────────────────────────────────────────────────
+  if q_ovr_buf and api.nvim_buf_is_valid(q_ovr_buf) then
+    api.nvim_buf_clear_namespace(q_ovr_buf, state.q_overlay_ns, 0, -1)
+    if is_q_ovr_active then
+      api.nvim_win_set_option(q_ovr_win, 'cursorline', true)
+      if b_buf then
+        if state.is_connected then
+          connection_status = ' Connected to ' .. state.db_type
+        else
+          connection_status = ' Not Connected'
+        end
+
+        local win_width   = api.nvim_win_get_width(b_win) - 2
+        local mode_text   = is_insert and ' INSERT ' or ' NORMAL '
+        local left_status = mode_text .. (state.is_connected and ' Connected to ' .. state.db_type or ' Not Connected')
+
+        local formatted_time = os.date '[%H:%M:%S]'
+        local right_status
+        if state.last_query_status == '' then
+          right_status = formatted_time
+        else
+          right_status = formatted_time .. ' ' .. state.last_query_status
+        end
+
+        local space_count = win_width - #left_status - #right_status - 1
+        local full_line   = left_status .. string.rep(' ', space_count) .. right_status
+
+        if space_count > 0 then
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { full_line })
+        else
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { left_status .. ' ' .. right_status })
+        end
+
+        api.nvim_buf_add_highlight(b_buf, -1, (is_insert and state.hl_mode_insert or state.hl_mode_normal), 0, 0, #mode_text)
+
+        if #right_status > 0 then
+          local start_col = #full_line - #right_status
+          api.nvim_buf_add_highlight(b_buf, -1, 'SoftOrangeKey', 0, start_col, -1)
+        end
+
+        local left_text  = 'Insert Mode: i | Execute: <enter> | Accept: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+        local right_text = 'Help: ^? | Leader: <space>'
+        local space_count2 = win_width - #left_text - #right_text - 1
+
+        if space_count2 > 0 then
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. string.rep(' ', space_count2) .. right_text })
+        else
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. ' ' .. right_text })
+        end
+
+        api.nvim_buf_add_highlight(b_buf, -1, (is_insert and state.hl_mode_insert or state.hl_mode_normal), 0, 0, #mode_text)
+      end
+    else
+      api.nvim_win_set_option(q_ovr_win, 'cursorline', false)
+    end
+  end
+
+  -- ─── Results overlay ─────────────────────────────────────────────────────────
+  if r_ovr_buf and api.nvim_buf_is_valid(r_ovr_buf) then
+    api.nvim_buf_clear_namespace(r_ovr_buf, state.r_overlay_ns, 0, -1)
+    if is_r_ovr_active then
+      if b_buf then
+        api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
+
+        if state.is_connected then
+          connection_status = 'Connected to ' .. state.db_type
+        else
+          connection_status = 'Not Connected'
+        end
+
+        api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
+
+        local win_width  = api.nvim_win_get_width(b_win) - 2
+        local left_text  = 'Exit: <esc>'
+        local right_text = 'Help: ^? | Leader: <space>'
+        local space_count = win_width - #left_text - #right_text - 1
+
+        if space_count > 0 then
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. string.rep(' ', space_count) .. right_text })
+        else
+          api.nvim_buf_set_lines(b_buf, 1, 2, false, { left_text .. ' ' .. right_text })
+        end
+      end
+    else
+      api.nvim_buf_clear_namespace(r_ovr_buf, state.ns, 0, -1)
+      apply_table_highlights(r_ovr_buf)
+    end
+  end
+
+  -- ─── Scrollbar ───────────────────────────────────────────────────────────────
+  if ovr_scroll_buf and ovr_win then
+    api.nvim_buf_set_lines(ovr_scroll_buf, 0, -1, false, { get_h_scroll_indicator(ovr_win) })
+  end
+
+  -- ─── Bottom bar key-hint highlights ─────────────────────────────────────────
+  local ns = api.nvim_create_namespace 'my_dynamic_highlights'
+  api.nvim_buf_clear_namespace(b_buf, ns, 0, -1)
+
+  local lines = api.nvim_buf_get_lines(b_buf, 0, -1, false)
+  for i, line in ipairs(lines) do
+    local line_idx = i - 1
+
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Accept:', 'Next:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    for _, word in ipairs(labels) do
+      local s, e = line:find(word)
+      if s then
+        api.nvim_buf_add_highlight(b_buf, ns, 'SoftRedLabel', line_idx, s - 1, e)
+      end
+    end
+
+    local orange_patterns = { '<enter>', ' ^n ', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    for _, pat in ipairs(orange_patterns) do
+      local s, e = line:find(pat)
+      if s then
+        api.nvim_buf_add_highlight(b_buf, ns, 'SoftOrangeKey', line_idx, s - 1, e)
+      end
+    end
+  end
+end
+
+-- 4. Main Focus and Bottom Bar Handler
+local function old_update_ui_state()
   local exp_win, ovr_win, ovr_buf, q_ovr_buf, r_ovr_buf, ovr_scroll_buf, b_buf = nil, nil, nil, nil, nil, nil, nil
   for id, name in pairs(state.wins) do
     if name == 'explorer' then
@@ -1359,6 +1959,7 @@ local function update_ui_state()
     if is_ovr_active then
       hl_group = 'ExplorerLineActive' -- Use active highlight if focused
       local cursor_row = api.nvim_win_get_cursor(ovr_win)[1]
+      local line = api.nvim_buf_get_lines(ovr_buf, cursor_row - 1, cursor_row, false)[1] or ''
 
       -- Apply the active highlight to the exact line the cursor is on
       -- range: (buffer, ns, highlight_group, line_start_0_idx, col_start, col_end)
@@ -1370,6 +1971,7 @@ local function update_ui_state()
         0, -- Start from column 0
         -1 -- Go to the end of the line
       )
+      --- here
     end
 
     -- Re-apply the specific 'first line text' highlight over the active line highlight if needed
@@ -1470,7 +2072,7 @@ local function update_ui_state()
 
         -- 2. Your existing text
         local left_text = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Exit: <esc>'
-        local right_text = 'Help: ? | Leader: <space>'
+        local right_text = 'Help: ^? | Leader: <space>'
 
         -- 3. Calculate spaces needed
         -- We subtract 1 or 2 to account for the sign column/edge
@@ -1555,8 +2157,8 @@ local function update_ui_state()
         local win_width = api.nvim_win_get_width(b_win) - 2
 
         -- 2. Your existing text
-        local left_text = 'Insert Mode: i | Execute: <enter> | History: h | Exit: <esc>'
-        local right_text = 'Help: ? | Leader: <space>'
+        local left_text = 'Insert Mode: i | Execute: <enter> | Accept: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+        local right_text = 'Help: ^? | Leader: <space>'
 
         -- 3. Calculate spaces needed
         -- We subtract 1 or 2 to account for the sign column/edge
@@ -1597,7 +2199,7 @@ local function update_ui_state()
 
         -- 2. Your existing text
         local left_text = 'Exit: <esc>'
-        local right_text = 'Help: ? | Leader: <space>'
+        local right_text = 'Help: ^? | Leader: <space>'
 
         -- 3. Calculate spaces needed
         -- We subtract 1 or 2 to account for the sign column/edge
@@ -1640,7 +2242,7 @@ local function update_ui_state()
     local line_idx = i - 1
 
     -- Patterns to match: Label (Soft Red)
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Accept:', 'Next:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -1650,7 +2252,7 @@ local function update_ui_state()
 
     -- Patterns to match: Keys (Soft Orange)
     -- Uses lua patterns to find <...> or single letters after a colon
-    local orange_patterns = { '<enter>', ' ^n ', '<space>', '?', ' ^e ', ' ^c ', ' ^d ', ' i ', ' h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
@@ -1768,15 +2370,18 @@ end
 
 M.close_all_windows = function()
   pcall(api.nvim_del_augroup_by_name, 'DbViewEvents')
-  close_suggestions()
+  suggest_close()
+
   for id, _ in pairs(state.wins) do
     if api.nvim_win_is_valid(id) then
       api.nvim_win_close(id, true)
     end
   end
+
   if state.parent_win_id and api.nvim_win_is_valid(state.parent_win_id) then
     api.nvim_win_close(state.parent_win_id, true)
   end
+
   state.wins = {}
   state.db_data = {}
   state.is_connected = false
@@ -2020,10 +2625,21 @@ M.open_db_float = function()
   -- Events
   api.nvim_create_augroup('DbViewEvents', { clear = true })
   api.nvim_create_autocmd({ 'WinEnter', 'CursorMoved', 'ModeChanged', 'InsertEnter', 'WinScrolled' }, { group = 'DbViewEvents', callback = update_ui_state })
+  
   api.nvim_create_autocmd('TextChangedI', {
     group = 'DbViewEvents',
+    buffer = q_ovr_buf,          -- only fire for the query buffer, not globally
     callback = function()
-      show_suggestions(q_ovr_win)
+      suggest_update(q_ovr_win)
+    end,
+  })
+
+  -- close suggestions when leaving insert mode
+  api.nvim_create_autocmd({ 'InsertLeave', 'BufLeave' }, {
+    group  = 'DbViewEvents',
+    buffer = q_ovr_buf,
+    callback = function()
+      suggest_close()
     end,
   })
   --api.nvim_create_autocmd('WinEnter', { group='DbViewEvents', callback=function() if api.nvim_get_current_win() == q_win then vim.cmd('startinsert') end end })
@@ -2069,13 +2685,31 @@ M.open_db_float = function()
       end
       if name == 'query' then
         vim.keymap.set('i', '<Tab>', function()
-          if state.suggest_win then
-            confirm_suggestion(q_ovr_win)
-          else
-            return '<Tab>'
+          local confirmed = suggest_confirm(q_ovr_win)
+          if not confirmed then
+            api.nvim_feedkeys(
+              api.nvim_replace_termcodes('<Tab>', true, false, true),
+              'n', false
+            )
           end
-        end, { buffer = b, expr = true })
-        vim.keymap.set('i', '<Esc>', '<cmd>stopinsert<cr>', { buffer = b })
+        end, { buffer = q_ovr_buf })        -- ← q_ovr_buf, not b
+      
+        vim.keymap.set('i', '<C-n>', function()
+          suggest_move(1)
+        end, { buffer = q_ovr_buf })        -- ← q_ovr_buf, not b
+      
+        vim.keymap.set('i', '<C-p>', function()
+          suggest_move(-1)
+        end, { buffer = q_ovr_buf })        -- ← q_ovr_buf, not b
+      
+        vim.keymap.set('i', '<Esc>', function()
+          if suggest_is_open() then
+            suggest_close()
+            vim.cmd 'stopinsert'
+          else
+            vim.cmd 'stopinsert'
+          end
+        end, { buffer = q_ovr_buf })        -- ← q_ovr_buf, not b
       end
       if name == 'q_overlay' then
         -- Execute query on Enter in Normal mode
