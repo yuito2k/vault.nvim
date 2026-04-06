@@ -6,6 +6,8 @@ local state = {
   parent_win_id = nil,
   tree_highlights = {},  -- populated by render_explorer_tree
   tree_line_map = {},
+  result_sets = {},
+  result_set_index = 1,
   ns = api.nvim_create_namespace 'DbUI_NS',
   overlay_ns = api.nvim_create_namespace 'ExplorerOverlayNS',
   q_overlay_ns = api.nvim_create_namespace 'QueryOverlayNS',
@@ -1764,12 +1766,6 @@ local function update_ui_state()
     if is_q_ovr_active then
       api.nvim_win_set_option(q_ovr_win, 'cursorline', true)
       if b_buf then
-        if state.is_connected then
-          connection_status = ' Connected to ' .. state.db_type
-        else
-          connection_status = ' Not Connected'
-        end
-
         local win_width   = api.nvim_win_get_width(b_win) - 2
         local mode_text   = is_insert and ' INSERT ' or ' NORMAL '
         local left_status = mode_text .. (state.is_connected and ' Connected to ' .. state.db_type or ' Not Connected')
@@ -1798,7 +1794,14 @@ local function update_ui_state()
           api.nvim_buf_add_highlight(b_buf, -1, 'SoftOrangeKey', 0, start_col, -1)
         end
 
-        local left_text  = 'Insert Mode: i | Execute: <enter> | Accept: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+        local left_text = nil
+
+        if is_insert then
+          left_text  = 'Insert Mode: i | Execute: <enter> | AutoComplete: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+        else
+          left_text  = 'Insert Mode: i | Execute: <enter> | History: ^h | Exit: <esc>'
+        end
+
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count2 = win_width - #left_text - #right_text - 1
 
@@ -1821,17 +1824,41 @@ local function update_ui_state()
     if is_r_ovr_active then
       if b_buf then
         api.nvim_buf_set_lines(b_buf, 0, -1, false, {})
+        local win_width   = api.nvim_win_get_width(b_win) - 2
 
-        if state.is_connected then
-          connection_status = 'Connected to ' .. state.db_type
+        local left_status = (state.is_connected and 'Connected to ' .. state.db_type or 'Not Connected')
+        local formatted_time = os.date '[%H:%M:%S]'
+
+        local right_status = ''
+        if state.result_sets and #state.result_sets > 1 then
+          right_status = formatted_time .. string.format(' Showing result of [%d/%d]', state.result_set_index, #state.result_sets)
         else
-          connection_status = 'Not Connected'
+          right_status = formatted_time
         end
 
-        api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
+        local space_count = win_width - #left_status - #right_status - 1
+        local full_line   = left_status .. string.rep(' ', space_count) .. right_status
+
+        if space_count > 0 then
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { full_line })
+        else
+          api.nvim_buf_set_lines(b_buf, 0, 1, false, { left_status .. ' ' .. right_status })
+        end
+
+        if #right_status > 0 then
+          local start_col = #full_line - #right_status
+          api.nvim_buf_add_highlight(b_buf, -1, 'SoftOrangeKey', 0, start_col, -1)
+        end
 
         local win_width  = api.nvim_win_get_width(b_win) - 2
-        local left_text  = 'Exit: <esc>'
+
+        --local left_text  = 'Exit: <esc>'
+        local set_indicator = ''
+        if state.result_sets and #state.result_sets > 1 then
+          set_indicator = string.format(' | Press <tab> to change result table', state.result_set_index, #state.result_sets)
+        end
+        local left_text = 'Exit: <esc>' .. set_indicator
+
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
 
@@ -1860,7 +1887,7 @@ local function update_ui_state()
   for i, line in ipairs(lines) do
     local line_idx = i - 1
 
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Accept:', 'Next:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -2264,6 +2291,106 @@ local function old_update_ui_state()
 end
 
 local function execute_query()
+  local q_ovr_win = nil
+  local r_ovr_buf = nil
+  for id, name in pairs(state.wins) do
+    if name == 'q_overlay' then q_ovr_win = id end
+    if name == 'r_overlay' then r_ovr_buf = api.nvim_win_get_buf(id) end
+  end
+  if not q_ovr_win or not r_ovr_buf then return end
+
+  local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(q_ovr_win), 0, -1, false)
+  local full_text = table.concat(lines, ' ')
+
+  -- Split on semicolons, filter blank statements
+  local statements = {}
+  for stmt in full_text:gmatch('[^;]+') do
+    local trimmed = stmt:match('^%s*(.-)%s*$')
+    if trimmed ~= '' then
+      table.insert(statements, trimmed)
+    end
+  end
+
+  if #statements == 0 then
+    render_results_table(r_ovr_buf, { headers = { 'Error' }, rows = { { 'No query entered' } } })
+    return
+  end
+
+  -- NEW: store multiple result sets
+  state.result_sets = {}
+  state.result_set_index = 1
+
+  local total_start = os.clock()
+  local total_rows = 0
+  local had_error = false
+
+  for _, sql in ipairs(statements) do
+    local elapsed_ms = nil
+    local success, result = pcall(function()
+      return require('sqlite.db').with_open(state.db_path, function(conn)
+        local t0 = os.clock()
+        local r = conn:eval(sql)
+        elapsed_ms = (os.clock() - t0) * 1000
+        return r
+      end)
+    end)
+
+    if not success then
+      local err_msg = tostring(result)
+      local clean_err = err_msg:match('[Ee]rr[or]*:%s*(.+)$') or err_msg
+      table.insert(state.result_sets, { headers = { 'Error' }, rows = { { clean_err } } })
+      had_error = true
+    elseif type(result) == 'table' and #result > 0 then
+      -- Has rows — extract headers from first row keys
+      local headers = {}
+      for k in pairs(result[1]) do table.insert(headers, k) end
+      table.sort(headers) -- stable column order
+      local rows = {}
+      for _, row_data in ipairs(result) do
+        local row = {}
+        for _, h in ipairs(headers) do
+          table.insert(row, tostring(row_data[h] or 'NULL'))
+        end
+        table.insert(rows, row)
+      end
+      total_rows = total_rows + #rows
+      table.insert(state.result_sets, { headers = headers, rows = rows })
+    elseif type(result) == 'table' and #result == 0 then
+      -- SELECT returned zero rows — still show the column headers if possible
+      -- Re-run with a LIMIT 0 trick to get column names
+      local headers = {}
+      pcall(function()
+        local col_result = require('sqlite.db').with_open(state.db_path, function(conn)
+          return conn:eval(sql .. ' LIMIT 0')
+        end)
+        if type(col_result) == 'table' then
+          for k in pairs(col_result) do table.insert(headers, k) end
+          table.sort(headers)
+        end
+      end)
+      if #headers == 0 then headers = { 'Result' } end
+      table.insert(state.result_sets, { headers = headers, rows = {} })
+    else
+      -- result == true means a non-SELECT DML (INSERT/UPDATE/DELETE)
+      table.insert(state.result_sets, { headers = { 'Status' }, rows = { { 'Success' } } })
+    end
+  end
+
+  local total_ms = (os.clock() - total_start) * 1000
+
+  -- Render the first result set immediately
+  render_results_table(r_ovr_buf, state.result_sets[1])
+
+  -- Build status: "Executed N statements in X ms"
+  local stmt_word = #statements == 1 and '1 statement' or (#statements .. ' statements')
+  state.last_query_status = string.format(
+    'Executed %s in %.2fms', stmt_word, total_ms
+  )
+
+  update_ui_state()
+end
+
+local function old_execute_query()
   local q_ovr_win = nil
   local r_ovr_buf = nil
 
@@ -2715,6 +2842,23 @@ M.open_db_float = function()
         -- Execute query on Enter in Normal mode
         vim.keymap.set('n', '<CR>', execute_query, { buffer = b, desc = 'Execute SQL Query' })
       end
+
+      -- Cycle through multiple result sets with Tab
+      vim.keymap.set('n', '<Tab>', function()
+        if not state.result_sets or #state.result_sets < 2 then return end
+        state.result_set_index = (state.result_set_index % #state.result_sets) + 1
+        local r_ovr_buf_local = nil
+        for id, name in pairs(state.wins) do
+          if name == 'r_overlay' then
+            r_ovr_buf_local = api.nvim_win_get_buf(id)
+            break
+          end
+        end
+        if r_ovr_buf_local then
+          render_results_table(r_ovr_buf_local, state.result_sets[state.result_set_index])
+        end
+        update_ui_state()
+      end, { buffer = r_ovr_buf })
     end
   end
   update_ui_state()
