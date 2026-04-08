@@ -342,6 +342,236 @@ local function apply_table_highlights(buf)
 end
 
 local function render_results_table(buf, data)
+  local win_id = vim.fn.bufwinid(buf)
+  local win_width = win_id ~= -1 and vim.api.nvim_win_get_width(win_id) or vim.o.columns
+
+  local COL_PADDING = 2
+
+  -- 1. Natural widths using display width
+  local widths = {}
+  for i, h in ipairs(data.headers) do
+    widths[i] = vim.fn.strdisplaywidth(h)
+    for _, row in ipairs(data.rows) do
+      local stripped = tostring(row[i] or ''):match('^%s*(.-)%s*$')
+      widths[i] = math.max(widths[i], vim.fn.strdisplaywidth(stripped))
+    end
+    widths[i] = widths[i] + COL_PADDING
+  end
+
+  -- 2. Stretch last column to fill window
+  local current_total = 0
+  for i = 1, #widths - 1 do
+    current_total = current_total + widths[i]
+  end
+  local remaining = win_width - current_total
+  if remaining > widths[#widths] then
+    widths[#widths] = remaining
+  end
+
+  -- 3. Cell builder — returns string and its BYTE length
+  local function build_cell(val, width)
+    local s = ' ' .. tostring(val or ''):match('^%s*(.-)%s*$')
+    local display_w = vim.fn.strdisplaywidth(s)
+    local padding = width - display_w
+    if padding < 0 then padding = 0 end
+    local spaces = string.rep(' ', padding)
+    local full = s .. spaces
+    return full, #full  -- byte length of full cell
+  end
+
+  -- 4. Build header + store byte offsets
+  local header_str = ''
+  state.table_cols = {}      -- byte offsets per column (from header, used for nav)
+  local byte_pos = 0
+  for i, h in ipairs(data.headers) do
+    table.insert(state.table_cols, byte_pos)
+    local full_cell, byte_len = build_cell(h:upper(), widths[i])
+    header_str = header_str .. full_cell
+    byte_pos = byte_pos + byte_len
+  end
+
+  -- 5. Build rows + store per-row byte offsets for accurate cell highlighting
+  local row_lines = {}
+  state.row_col_offsets = {}  -- [row_index] = { col1_byte, col2_byte, ... }
+  for r_idx, row in ipairs(data.rows) do
+    local line = ''
+    local offsets = {}
+    local row_byte_pos = 0
+    for i, val in ipairs(row) do
+      table.insert(offsets, row_byte_pos)
+      local full_cell, byte_len = build_cell(val, widths[i])
+      line = line .. full_cell
+      row_byte_pos = row_byte_pos + byte_len
+    end
+    -- pad missing columns
+    while #offsets < #data.headers do
+      table.insert(offsets, row_byte_pos)
+    end
+    table.insert(row_lines, line)
+    table.insert(state.row_col_offsets, offsets)
+  end
+
+  -- 6. Write to buffer
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(buf, 'modifiable', true)
+  api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
+  api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
+  api.nvim_buf_set_option(buf, 'modifiable', false)
+
+  if win_id ~= -1 then
+    api.nvim_win_set_option(win_id, 'wrap', false)
+  end
+
+  apply_table_highlights(buf)
+end
+
+local function oldv3_render_results_table(buf, data)
+  local win_id = vim.fn.bufwinid(buf)
+  local win_width = win_id ~= -1 and vim.api.nvim_win_get_width(win_id) or vim.o.columns
+
+  local COL_PADDING = 2
+
+  -- 1. Natural widths using display width
+  local widths = {}
+  for i, h in ipairs(data.headers) do
+    widths[i] = vim.fn.strdisplaywidth(h)
+    for _, row in ipairs(data.rows) do
+      local stripped = tostring(row[i] or ''):match('^%s*(.-)%s*$')
+      widths[i] = math.max(widths[i], vim.fn.strdisplaywidth(stripped))
+    end
+    widths[i] = widths[i] + COL_PADDING
+  end
+
+  -- 2. Stretch last column to fill window
+  local current_total = 0
+  for i = 1, #widths - 1 do
+    current_total = current_total + widths[i]
+  end
+  local remaining = win_width - current_total
+  if remaining > widths[#widths] then
+    widths[#widths] = remaining
+  end
+
+  -- 3. Cell builder — returns the string AND its byte length separately
+  --    display_width = strdisplaywidth, but padding uses spaces (1 byte = 1 col)
+  --    so byte_len = #content_bytes + padding_spaces
+  local function build_cell(val, width)
+    local s = ' ' .. tostring(val or ''):match('^%s*(.-)%s*$')
+    local display_w = vim.fn.strdisplaywidth(s)
+    local padding = width - display_w
+    if padding < 0 then padding = 0 end
+    local spaces = string.rep(' ', padding)
+    return s .. spaces, #s + padding  -- content, byte_length
+  end
+
+  -- 4. Build header — track byte offsets for state.table_cols
+  local header_str = ''
+  state.table_cols = {}
+  local byte_pos = 0
+  for i, h in ipairs(data.headers) do
+    table.insert(state.table_cols, byte_pos)
+    local full_cell, byte_len = build_cell(h:upper(), widths[i])
+    header_str = header_str .. full_cell
+    byte_pos = byte_pos + byte_len
+  end
+
+  -- 5. Build rows — use same build_cell so byte offsets match header
+  local row_lines = {}
+  for _, row in ipairs(data.rows) do
+    local line = ''
+    for i, val in ipairs(row) do
+      local full_cell, _ = build_cell(val, widths[i])
+      line = line .. full_cell
+    end
+    table.insert(row_lines, line)
+  end
+
+  -- 6. Write to buffer
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(buf, 'modifiable', true)
+  api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
+  api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
+  api.nvim_buf_set_option(buf, 'modifiable', false)
+
+  -- 7. No wrap — horizontal scroll instead
+  if win_id ~= -1 then
+    api.nvim_win_set_option(win_id, 'wrap', false)
+  end
+
+  apply_table_highlights(buf)
+end
+
+local function oldv2_render_results_table(buf, data)
+  local win_id = vim.fn.bufwinid(buf)
+  local win_width = win_id ~= -1 and vim.api.nvim_win_get_width(win_id) or vim.o.columns
+
+  local COL_PADDING = 2
+
+  -- 1. Natural widths — no capping
+  local widths = {}
+  for i, h in ipairs(data.headers) do
+    widths[i] = vim.fn.strdisplaywidth(h)
+    for _, row in ipairs(data.rows) do
+      local stripped = tostring(row[i] or ''):match('^%s*(.-)%s*$')
+      widths[i] = math.max(widths[i], vim.fn.strdisplaywidth(stripped))
+    end
+    widths[i] = widths[i] + COL_PADDING
+  end
+
+  -- 2. Stretch last column to at least fill window width
+  local current_total = 0
+  for i = 1, #widths - 1 do
+    current_total = current_total + widths[i]
+  end
+  local remaining = win_width - current_total
+  if remaining > widths[#widths] then
+    widths[#widths] = remaining
+  end
+
+  -- 3. Helper: pad a cell to exact width (no truncation)
+  local function cell(val, width)
+    local s = ' ' .. tostring(val or ''):match('^%s*(.-)%s*$')
+    -- Use vim.fn.strdisplaywidth for correct multibyte display width
+    local display_w = vim.fn.strdisplaywidth(s)
+    local padding = width - display_w
+    if padding < 0 then padding = 0 end
+    return s .. string.rep(' ', padding)
+  end
+
+  -- 4. Build header
+  local header_str = ''
+  state.table_cols = {}
+  for i, h in ipairs(data.headers) do
+    table.insert(state.table_cols, #header_str)
+    header_str = header_str .. cell(h:upper(), widths[i])
+  end
+
+  -- 5. Build rows
+  local row_lines = {}
+  for _, row in ipairs(data.rows) do
+    local line = ''
+    for i, val in ipairs(row) do
+      line = line .. cell(val, widths[i])
+    end
+    table.insert(row_lines, line)
+  end
+
+  -- 6. Write to buffer
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(buf, 'modifiable', true)
+  api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
+  api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
+  api.nvim_buf_set_option(buf, 'modifiable', false)
+
+  -- 7. Disable wrap so long lines scroll horizontally instead of wrapping
+  if win_id ~= -1 then
+    api.nvim_win_set_option(win_id, 'wrap', false)
+  end
+
+  apply_table_highlights(buf)
+end
+
+local function old_render_results_table(buf, data)
   -- 1. Get window width for padding (defaults to editor width if window isn't active)
   local win_id = vim.fn.bufwinid(buf)
   local win_width = win_id ~= -1 and vim.api.nvim_win_get_width(win_id) or vim.o.columns
@@ -396,8 +626,27 @@ local function render_results_table(buf, data)
   apply_table_highlights(buf)
 end
 
--- 4. Cursor & Cell Movement Logic
 local function move_cell(dir)
+  local win = api.nvim_get_current_win()
+  local cursor = api.nvim_win_get_cursor(win)
+
+  local row_idx = cursor[1] - 1
+  local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
+                  or state.table_cols
+
+  local col_idx = 1
+  for i, offset in ipairs(offsets) do
+    if cursor[2] >= offset then
+      col_idx = i
+    end
+  end
+
+  local next_idx = math.max(1, math.min(#offsets, col_idx + dir))
+  api.nvim_win_set_cursor(win, { cursor[1], offsets[next_idx] })
+end
+
+-- 4. Cursor & Cell Movement Logic
+local function old_move_cell(dir)
   local win = api.nvim_get_current_win()
   local cursor = api.nvim_win_get_cursor(win)
   local current_idx = 1
@@ -1722,22 +1971,42 @@ local function update_ui_state()
     local buf = api.nvim_win_get_buf(r_ovr_win)
     apply_table_highlights(buf)
 
-    local start_col = 0
-    for _, offset in ipairs(state.table_cols) do
+    -- row_idx is 0-based into row_col_offsets (header is line 1, rows start line 2)
+    local row_idx = cursor[1] - 1  -- line 2 → index 1
+    local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
+                    or state.table_cols
+
+    -- Find which column the cursor is in using this row's byte offsets
+    local col_idx = 1
+    for i, offset in ipairs(offsets) do
       if cursor[2] >= offset then
-        start_col = offset
+        col_idx = i
       end
     end
 
-    local next_offset = -1
-    for _, offset in ipairs(state.table_cols) do
-      if offset > start_col then
-        next_offset = offset
-        break
-      end
-    end
+    local start_col = offsets[col_idx]
+    local next_offset = offsets[col_idx + 1] or -1
 
+    -- Snap cursor to cell start
+    api.nvim_win_set_cursor(r_ovr_win, { cursor[1], start_col })
     api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
+
+--    local start_col = 0
+--    for _, offset in ipairs(state.table_cols) do
+--      if cursor[2] >= offset then
+--        start_col = offset
+--      end
+--    end
+--
+--    local next_offset = -1
+--    for _, offset in ipairs(state.table_cols) do
+--      if offset > start_col then
+--        next_offset = offset
+--        break
+--      end
+--    end
+--
+--    api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
   end
 
   -- ─── Borders & Titles ────────────────────────────────────────────────────────
@@ -2673,6 +2942,9 @@ M.open_db_float = function()
     zindex = 110,
   })
   state.wins[r_ovr_win] = 'r_overlay'
+
+  api.nvim_win_set_option(r_win, 'wrap', false)
+  api.nvim_win_set_option(r_ovr_win, 'wrap', false)
 
   render_results_table(r_ovr_buf, {
     headers = { 'ID', 'USERNAME', 'EMAIL', 'STATUS' },
