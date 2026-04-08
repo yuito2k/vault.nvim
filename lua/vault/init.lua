@@ -330,8 +330,21 @@ local function get_h_scroll_indicator(win_id)
   return bar
 end
 
+local function apply_table_highlights(buf, has_header)
+  api.nvim_buf_clear_namespace(buf, state.ns, 0, -1)
+  local line_count = api.nvim_buf_line_count(buf)
+  if has_header then
+    api.nvim_buf_add_highlight(buf, state.ns, state.hl_header, 0, 0, -1)
+  end
+  local start = has_header and 1 or 0
+  for i = start, line_count - 1 do
+    local hl = (i % 2 == 0) and state.hl_row_even or state.hl_row_odd
+    api.nvim_buf_add_highlight(buf, state.ns, hl, i, 0, -1)
+  end
+end
+
 -- 3. Table config
-local function apply_table_highlights(buf)
+local function old_apply_table_highlights(buf)
   api.nvim_buf_clear_namespace(buf, state.ns, 0, -1)
   local line_count = api.nvim_buf_line_count(buf)
   api.nvim_buf_add_highlight(buf, state.ns, state.hl_header, 0, 0, -1)
@@ -411,15 +424,50 @@ local function render_results_table(buf, data)
     table.insert(state.row_col_offsets, offsets)
   end
 
-  -- 6. Write to buffer
+  ---- 6. Write to buffer
+  --api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  --api.nvim_buf_set_option(buf, 'modifiable', true)
+  --api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
+  --api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
+  --api.nvim_buf_set_option(buf, 'modifiable', false)
+
+  -- 6. Write header to r_win buffer, rows to r_ovr_win buffer
   api.nvim_buf_set_option(buf, 'buftype', 'nofile')
   api.nvim_buf_set_option(buf, 'modifiable', true)
-  api.nvim_buf_set_lines(buf, 0, -1, false, { header_str })
-  api.nvim_buf_set_lines(buf, 1, -1, false, row_lines)
+  api.nvim_buf_set_lines(buf, 0, -1, false, row_lines)  -- rows only
   api.nvim_buf_set_option(buf, 'modifiable', false)
+
+  -- Write header to a separate sticky header buffer
+  for id, name in pairs(state.wins) do
+    if name == 'r_header' and api.nvim_win_is_valid(id) then
+      local hbuf = api.nvim_win_get_buf(id)
+      api.nvim_buf_set_option(hbuf, 'modifiable', true)
+      api.nvim_buf_set_lines(hbuf, 0, -1, false, { header_str })
+      api.nvim_buf_set_option(hbuf, 'modifiable', false)
+      -- Apply header highlight
+      api.nvim_buf_clear_namespace(hbuf, state.ns, 0, -1)
+      api.nvim_buf_add_highlight(hbuf, state.ns, state.hl_header, 0, 0, -1)
+    end
+  end
 
   if win_id ~= -1 then
     api.nvim_win_set_option(win_id, 'wrap', false)
+  end
+
+  -- 7. No wrap on both windows
+  for id, name in pairs(state.wins) do
+    if name == 'r_overlay' and api.nvim_win_is_valid(id) then
+      api.nvim_win_set_option(id, 'wrap', false)
+      api.nvim_win_set_option(id, 'scrolloff', 0)
+      api.nvim_win_set_option(id, 'sidescrolloff', 0)
+      api.nvim_win_set_option(id, 'sidescroll', 1)
+    end
+    if name == 'results' and api.nvim_win_is_valid(id) then
+      api.nvim_win_set_option(id, 'wrap', false)
+      api.nvim_win_set_option(id, 'scrolloff', 0)
+      api.nvim_win_set_option(id, 'sidescrolloff', 0)
+      api.nvim_win_set_option(id, 'sidescroll', 1)
+    end
   end
 
   apply_table_highlights(buf)
@@ -626,7 +674,7 @@ local function old_render_results_table(buf, data)
   apply_table_highlights(buf)
 end
 
-local function move_cell(dir)
+local function oldv2_move_cell(dir)
   local win = api.nvim_get_current_win()
   local cursor = api.nvim_win_get_cursor(win)
 
@@ -1963,20 +2011,14 @@ local function update_ui_state()
   -- ─── Results: header protection + cell cursor ───────────────────────────────
   if curr == r_ovr_win then
     local cursor = api.nvim_win_get_cursor(r_ovr_win)
-    if cursor[1] == 1 then
-      api.nvim_win_set_cursor(r_ovr_win, { 2, cursor[2] })
-      cursor = api.nvim_win_get_cursor(r_ovr_win)
-    end
-
     local buf = api.nvim_win_get_buf(r_ovr_win)
-    apply_table_highlights(buf)
+    apply_table_highlights(buf, false)
 
-    -- row_idx is 0-based into row_col_offsets (header is line 1, rows start line 2)
-    local row_idx = cursor[1] - 1  -- line 2 → index 1
+    -- cursor[1] is 1-based, row_col_offsets is 1-based, so index directly
+    local row_idx = cursor[1]
     local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
                     or state.table_cols
 
-    -- Find which column the cursor is in using this row's byte offsets
     local col_idx = 1
     for i, offset in ipairs(offsets) do
       if cursor[2] >= offset then
@@ -1987,27 +2029,57 @@ local function update_ui_state()
     local start_col = offsets[col_idx]
     local next_offset = offsets[col_idx + 1] or -1
 
-    -- Snap cursor to cell start
     api.nvim_win_set_cursor(r_ovr_win, { cursor[1], start_col })
     api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
-
---    local start_col = 0
---    for _, offset in ipairs(state.table_cols) do
---      if cursor[2] >= offset then
---        start_col = offset
---      end
---    end
---
---    local next_offset = -1
---    for _, offset in ipairs(state.table_cols) do
---      if offset > start_col then
---        next_offset = offset
---        break
---      end
---    end
---
---    api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
   end
+
+--  if curr == r_ovr_win then
+--    local cursor = api.nvim_win_get_cursor(r_ovr_win)
+--    if cursor[1] == 1 then
+--      api.nvim_win_set_cursor(r_ovr_win, { 2, cursor[2] })
+--      cursor = api.nvim_win_get_cursor(r_ovr_win)
+--    end
+--
+--    local buf = api.nvim_win_get_buf(r_ovr_win)
+--    apply_table_highlights(buf)
+--
+--    -- row_idx is 0-based into row_col_offsets (header is line 1, rows start line 2)
+--    local row_idx = cursor[1] - 1  -- line 2 → index 1
+--    local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
+--                    or state.table_cols
+--
+--    -- Find which column the cursor is in using this row's byte offsets
+--    local col_idx = 1
+--    for i, offset in ipairs(offsets) do
+--      if cursor[2] >= offset then
+--        col_idx = i
+--      end
+--    end
+--
+--    local start_col = offsets[col_idx]
+--    local next_offset = offsets[col_idx + 1] or -1
+--
+--    -- Snap cursor to cell start
+--    api.nvim_win_set_cursor(r_ovr_win, { cursor[1], start_col })
+--    api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
+--
+----    local start_col = 0
+----    for _, offset in ipairs(state.table_cols) do
+----      if cursor[2] >= offset then
+----        start_col = offset
+----      end
+----    end
+----
+----    local next_offset = -1
+----    for _, offset in ipairs(state.table_cols) do
+----      if offset > start_col then
+----        next_offset = offset
+----        break
+----      end
+----    end
+----
+----    api.nvim_buf_add_highlight(buf, state.ns, state.hl_cell_cursor, cursor[1] - 1, start_col, next_offset)
+--  end
 
   -- ─── Borders & Titles ────────────────────────────────────────────────────────
   for win_id, name in pairs(state.wins) do
@@ -2146,6 +2218,20 @@ local function update_ui_state()
   -- ─── Scrollbar ───────────────────────────────────────────────────────────────
   if ovr_scroll_buf and ovr_win then
     api.nvim_buf_set_lines(ovr_scroll_buf, 0, -1, false, { get_h_scroll_indicator(ovr_win) })
+  end
+
+  -- Sync header scroll with results scroll
+  for id, name in pairs(state.wins) do
+    if name == 'r_header' and api.nvim_win_is_valid(id) then
+      if r_ovr_win then
+        local view = vim.api.nvim_win_call(r_ovr_win, function()
+          return vim.fn.winsaveview()
+        end)
+        vim.api.nvim_win_call(id, function()
+          vim.fn.winrestview({ leftcol = view.leftcol })
+        end)
+      end
+    end
   end
 
   -- ─── Bottom bar key-hint highlights ─────────────────────────────────────────
@@ -2559,6 +2645,126 @@ local function old_update_ui_state()
   end
 end
 
+local function move_cell(dir)
+  local win = api.nvim_get_current_win()
+  local cursor = api.nvim_win_get_cursor(win)
+
+  local row_idx = cursor[1]  -- was cursor[1] - 1, now direct
+  local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
+                  or state.table_cols
+
+  local col_idx = 1
+  for i, offset in ipairs(offsets) do
+    if cursor[2] >= offset then
+      col_idx = i
+    end
+  end
+
+  local next_idx = math.max(1, math.min(#offsets, col_idx + dir))
+  api.nvim_win_set_cursor(win, { cursor[1], offsets[next_idx] })
+
+  --vim.api.nvim_win_call(win, function()
+  --  local view = vim.fn.winsaveview()
+  --  local win_width = api.nvim_win_get_width(win)
+  --  local cursor_col = offsets[next_idx]
+  --  local cell_end = offsets[next_idx + 1] or (cursor_col + 10)
+  --  local leftcol = view.leftcol
+--
+  --  if dir > 0 then
+  --    if cell_end > leftcol + win_width then
+  --      view.leftcol = cell_end - win_width
+  --      vim.fn.winrestview(view)
+  --    end
+  --  else
+  --    if cursor_col < leftcol then
+  --      view.leftcol = cursor_col
+  --      vim.fn.winrestview(view)
+  --    end
+  --  end
+  --end)
+
+  vim.api.nvim_win_call(win, function()
+      local view = vim.fn.winsaveview()
+      local win_width = api.nvim_win_get_width(win)
+      local cursor_col = offsets[next_idx]
+
+      -- get actual end of cell: next col start, or end of line
+      local cell_end
+      if offsets[next_idx + 1] then
+        cell_end = offsets[next_idx + 1]
+      else
+        -- last cell: use actual line byte length
+        local line = api.nvim_buf_get_lines(
+          api.nvim_win_get_buf(win),
+          cursor[1] - 1,
+          cursor[1],
+          false
+        )[1] or ''
+        cell_end = #line
+      end
+
+      local leftcol = view.leftcol
+
+      if dir > 0 then
+        if cell_end > leftcol + win_width then
+          view.leftcol = cell_end - win_width
+          vim.fn.winrestview(view)
+        end
+      else
+        if cursor_col < leftcol then
+          view.leftcol = cursor_col
+          vim.fn.winrestview(view)
+        end
+      end
+  end)
+
+  update_ui_state()
+end
+
+local function oldv2_move_cell(dir)
+  local win = api.nvim_get_current_win()
+  local cursor = api.nvim_win_get_cursor(win)
+
+  local row_idx = cursor[1] - 1
+  local offsets = (state.row_col_offsets and state.row_col_offsets[row_idx])
+                    or state.table_cols
+
+  local col_idx = 1
+  for i, offset in ipairs(offsets) do
+    if cursor[2] >= offset then
+      col_idx = i
+    end
+  end
+
+  local next_idx = math.max(1, math.min(#offsets, col_idx + dir))
+  api.nvim_win_set_cursor(win, { cursor[1], offsets[next_idx] })
+
+  vim.api.nvim_win_call(win, function()
+    local view = vim.fn.winsaveview()
+    local win_width = api.nvim_win_get_width(win)
+    local cursor_col = offsets[next_idx]
+    -- get the end of this cell
+    local cell_end = offsets[next_idx + 1] or (cursor_col + 10)
+    local leftcol = view.leftcol
+
+    if dir > 0 then
+      -- scroll so the full cell is visible on the right
+      if cell_end > leftcol + win_width then
+        view.leftcol = cell_end - win_width
+        vim.fn.winrestview(view)
+      end
+    else
+      -- scroll so the full cell is visible on the left
+      if cursor_col < leftcol then
+        view.leftcol = cursor_col
+        vim.fn.winrestview(view)
+      end
+    end
+  end)
+  
+  update_ui_state()
+end
+
 local function execute_query()
   local q_ovr_win = nil
   local r_ovr_buf = nil
@@ -2934,17 +3140,34 @@ M.open_db_float = function()
     relative = 'win',
     win = r_win,
     width = q_w - 4,
-    height = math.floor(main_h * 0.6) - 6,
+    height = math.floor(main_h * 0.6) - 7,  -- was -6, now -7
     col = 2,
-    row = 1,
+    row = 2,                                  -- was 1, now 2
     style = 'minimal',
     border = 'none',
     zindex = 110,
   })
   state.wins[r_ovr_win] = 'r_overlay'
 
-  api.nvim_win_set_option(r_win, 'wrap', false)
+  local r_header_buf = api.nvim_create_buf(false, true)
+  local r_header_win = api.nvim_open_win(r_header_buf, false, {
+    relative = 'win',
+    win = r_win,
+    width = q_w - 4,
+    height = 1,
+    col = 2,
+    row = 1,          -- sits at the top of r_win
+    style = 'minimal',
+    border = 'none',
+    zindex = 115,     -- above r_ovr_win
+    focusable = false,
+  })
+  state.wins[r_header_win] = 'r_header'
+  api.nvim_win_set_option(r_header_win, 'wrap', false)
+
   api.nvim_win_set_option(r_ovr_win, 'wrap', false)
+  api.nvim_win_set_option(r_ovr_win, 'sidescrolloff', 3)
+  api.nvim_win_set_option(r_ovr_win, 'sidescroll', 1)
 
   render_results_table(r_ovr_buf, {
     headers = { 'ID', 'USERNAME', 'EMAIL', 'STATUS' },
