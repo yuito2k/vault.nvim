@@ -338,7 +338,9 @@ local function apply_table_highlights(buf, has_header)
   end
   local start = has_header and 1 or 0
   for i = start, line_count - 1 do
-    local hl = (i % 2 == 0) and state.hl_row_even or state.hl_row_odd
+    --local hl = (i % 2 == 0) and state.hl_row_even or state.hl_row_odd
+    -- offset by 1 so row 0 (first data row) gets hl_row_odd instead of even
+    local hl = ((i + 1) % 2 == 0) and state.hl_row_even or state.hl_row_odd
     api.nvim_buf_add_highlight(buf, state.ns, hl, i, 0, -1)
   end
 end
@@ -1962,6 +1964,15 @@ local function update_ui_state()
 
       -- snap cursor to text start
       api.nvim_win_set_cursor(ovr_win, { cursor_row, text_start })
+
+      local function has_value(tab, val)
+        for _, value in ipairs(tab) do
+            if value == val then
+                return true
+            end
+        end
+        return false
+      end
     
       -- paint child lines: connector fg only
       for line_nr, _ in pairs(lines_to_highlight) do
@@ -1969,11 +1980,23 @@ local function update_ui_state()
           for _, hl in ipairs(state.tree_highlights or {}) do
             if hl[1] == line_nr then
               if hl[4] == 'ExplorerConnector' then
+                local line_content = vim.api.nvim_get_current_line()
+                local tree_list = {"Views", "Indexes", "Triggers"}
+
                 if cursor_line_0 == 0 then
                   api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2], hl[3])
                   api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', 1, hl[2], hl[3])
-                else
+                elseif cursor_line_0 == 2 then
                   api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2]+1, hl[3])
+                else
+                  for _, item in ipairs(tree_list) do
+                    if cursor_line_text:find(item, 1, true) then
+                        api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2]+1, hl[3])
+                        break -- Stop looking once we find one match
+                    end
+                  end
+
+                  api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerConnectorActive', line_nr, hl[2]+6, hl[3])
                 end
               elseif hl[4] == 'ExplorerEmpty' then
                 api.nvim_buf_add_highlight(ovr_buf, state.overlay_ns, 'ExplorerEmpty', line_nr, hl[2], hl[3])
@@ -2815,11 +2838,50 @@ local function execute_query()
       local clean_err = err_msg:match('[Ee]rr[or]*:%s*(.+)$') or err_msg
       table.insert(state.result_sets, { headers = { 'Error' }, rows = { { clean_err } } })
       had_error = true
+    --elseif type(result) == 'table' and #result > 0 then
+    --  -- Has rows — extract headers from first row keys
+    --  local headers = {}
+    --  for k in pairs(result[1]) do table.insert(headers, k) end
+    --  table.sort(headers) -- stable column order
+    --  local rows = {}
+    --  for _, row_data in ipairs(result) do
+    --    local row = {}
+    --    for _, h in ipairs(headers) do
+    --      table.insert(row, tostring(row_data[h] or 'NULL'))
+    --    end
+    --    table.insert(rows, row)
+    --  end
+    --  total_rows = total_rows + #rows
+    --  table.insert(state.result_sets, { headers = headers, rows = rows })
     elseif type(result) == 'table' and #result > 0 then
-      -- Has rows — extract headers from first row keys
       local headers = {}
       for k in pairs(result[1]) do table.insert(headers, k) end
-      table.sort(headers) -- stable column order
+
+      -- PRAGMA for column order — isolated, cannot affect result
+      local col_order = {}
+      local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+["\']?(%w+)["\']?')
+      if table_name then
+        local ok, pragma = pcall(function()
+          return require('sqlite.db').with_open(state.db_path, function(conn)
+            return conn:eval('PRAGMA table_info(' .. table_name .. ')')
+          end)
+        end)
+        if ok and type(pragma) == 'table' then
+          for _, col in ipairs(pragma) do
+            col_order[col.name] = col.cid
+          end
+        end
+      end
+
+      if next(col_order) then
+        table.sort(headers, function(a, b)
+          return (col_order[a] or 999) < (col_order[b] or 999)
+        end)
+      else
+        table.sort(headers)
+      end
+
+      -- rows building unchanged
       local rows = {}
       for _, row_data in ipairs(result) do
         local row = {}
