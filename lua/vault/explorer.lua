@@ -1,6 +1,6 @@
 local api = vim.api
 local state = require('vault.state').state
-local connection = require('vault.connection')
+--local connection = require('vault.connection')
 
 local M = {}
 
@@ -257,6 +257,7 @@ function M.toggle_node()
   for _, word in ipairs(state.db_types) do
     if state.is_connected == false then
       if db_type == word then
+        local connection = require('vault.connection')
         connection.connect_db(buf, node_id)
         return
       end
