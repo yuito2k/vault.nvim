@@ -174,7 +174,7 @@ function M.move_cell(dir)
     end
   end)
 
-  update_ui_state()
+  M.update_ui_state()
 end
 
 -- ■■■ Inline Cell Edit (Ctrl+U) ■■■
