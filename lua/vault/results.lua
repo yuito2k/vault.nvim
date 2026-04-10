@@ -127,7 +127,7 @@ function M.render_results_table(buf, data)
     end
   end
 
-  apply_table_highlights(buf)
+  M.apply_table_highlights(buf)
 end
 
 function M.move_cell(dir)
