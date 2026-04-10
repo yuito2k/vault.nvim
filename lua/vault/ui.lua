@@ -269,7 +269,7 @@ function M.update_ui_state()
     results.apply_table_highlights(buf, false)
 
     -- offset row index by 1 when search bar is taking line 0
-    local data_row_idx = search_state.active and (cursor[1] - 1) or cursor[1]
+    local data_row_idx = filter.search_state.active and (cursor[1] - 1) or cursor[1]
     if data_row_idx < 1 then data_row_idx = 1 end
 
     local row_idx = data_row_idx
