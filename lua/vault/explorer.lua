@@ -1,6 +1,6 @@
 local api = vim.api
 local state = require('vault.state').state
---local connection = require('vault.connection')
+local connection = require('vault.connection')
 
 local M = {}
 
