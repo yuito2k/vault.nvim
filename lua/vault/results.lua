@@ -198,7 +198,7 @@ local function get_pk_info(table_name)
   return pk_col
 end
 
-local function edit_cell()
+function M.edit_cell()
   local r_ovr_win = nil
   local last_sql = nil
 
@@ -298,7 +298,7 @@ local function edit_cell()
   end
 end
 
-local function delete_row()
+function M.delete_row()
   local r_ovr_win = nil
   local last_sql = nil
 
@@ -617,7 +617,7 @@ local function flash_cell(buf, row, col_start, col_end, hl_group, duration_ms)
   end, duration_ms)
 end
 
-local function open_copy_menu()
+function M.open_copy_menu()
   local r_ovr_win = nil
   for id, name in pairs(state.wins) do
     if name == 'r_overlay' then r_ovr_win = id; break end
