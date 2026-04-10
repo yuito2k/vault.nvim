@@ -202,6 +202,7 @@ end
 function M.edit_cell()
   local r_ovr_win = nil
   local last_sql = nil
+  local ui = require('vault.ui')
 
   for id, name in pairs(state.wins) do
     if name == 'r_overlay' then r_ovr_win = id end
