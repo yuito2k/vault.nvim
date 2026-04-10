@@ -322,6 +322,7 @@ function M.delete_row()
   local table_name = last_sql and last_sql:match('[Ff][Rr][Oo][Mm]%s+["\']?(%w+)["\']?')
   if not table_name then
     state.last_query_status = 'Cannot determine source table'
+    local ui = require('vault.ui')
     ui.update_ui_state()
     return
   end
@@ -337,6 +338,7 @@ function M.delete_row()
 
   if not pk_col then
     state.last_query_status = 'No primary key found on ' .. table_name
+    local ui = require('vault.ui')
     ui.update_ui_state()
     return
   end
@@ -348,6 +350,7 @@ function M.delete_row()
 
   if not pk_col_idx then
     state.last_query_status = 'PK column not in result — SELECT ' .. pk_col .. ' to delete'
+    local ui = require('vault.ui')
     ui.update_ui_state()
     return
   end
@@ -374,6 +377,7 @@ function M.delete_row()
   end
 
   -- Switch to query window with cursor on the query, normal mode
+  local ui = require('vault.ui')
   ui.switch_to_win 'q_overlay'
   local q_ovr_win = nil
   for id, name in pairs(state.wins) do
