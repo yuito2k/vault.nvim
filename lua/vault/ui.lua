@@ -756,7 +756,7 @@ M.open_db_float = function()
       end, { buffer = ovr_buf, desc = "Delete DB Connection and return to list" })
       vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = b })
       if name == 'overlay' then
-        api.nvim_buf_set_keymap(ovr_buf, 'n', '<CR>', explorer.toggle_node(), { noremap = true, silent = true })
+        api.nvim_buf_set_keymap(ovr_buf, 'n', '<CR>', [[<cmd>lua require'vault.explorer'.toggle_node()<CR>]], { noremap = true, silent = true })
       end
       if name == 'query' then
         vim.keymap.set('i', '<Tab>', function()
