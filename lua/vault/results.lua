@@ -174,7 +174,8 @@ function M.move_cell(dir)
     end
   end)
 
-  M.update_ui_state()
+  local ui = require('vault.ui')
+  ui.update_ui_state()
 end
 
 -- ■■■ Inline Cell Edit (Ctrl+U) ■■■
