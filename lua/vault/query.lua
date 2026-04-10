@@ -317,6 +317,7 @@ function M.execute_query()
     'Executed %s in %.2fms', stmt_word, total_ms
   )
 
+  local ui = require('vault.ui')
   ui.update_ui_state()
 end
 
