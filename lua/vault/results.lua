@@ -1,5 +1,5 @@
 local api   = vim.api
-local ui = require('vault.ui')
+--local ui = require('vault.ui')
 local filter = require('vault.filter')
 local state = require('vault.state').state
 
@@ -174,7 +174,7 @@ function M.move_cell(dir)
     end
   end)
 
-  ui.update_ui_state()
+  update_ui_state()
 end
 
 -- ■■■ Inline Cell Edit (Ctrl+U) ■■■
