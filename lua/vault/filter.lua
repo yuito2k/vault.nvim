@@ -233,6 +233,7 @@ function M.search_close(r_ovr_win, r_ovr_buf)
   -- Re-render original full table (this also resets row_col_offsets correctly)
   local current_set = state.result_sets and state.result_sets[state.result_set_index]
   if current_set then
+    local results = require('vault.results')
     results.render_results_table(r_ovr_buf, current_set)
   end
 
