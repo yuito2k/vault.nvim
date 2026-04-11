@@ -469,7 +469,7 @@ local function open_export_menu(r_ovr_win)
   local function do_export(format)
     local current_set = state.result_sets and state.result_sets[state.result_set_index]
     if not current_set then return end
-    local active_rows = get_active_rows(current_set)  -- ← use this instead of current_set.rows
+    local active_rows = filter.get_active_rows(current_set)  -- ← use this instead of current_set.rows
 
     cleanup()
 
@@ -739,7 +739,7 @@ function M.open_copy_menu()
     local cursor  = api.nvim_win_get_cursor(r_ovr_win)
     local row_idx = filter.search_state.active and (cursor[1] - 1) or cursor[1]
     if row_idx < 1 then row_idx = 1 end
-    local active_rows = get_active_rows(current_set)
+    local active_rows = filter.get_active_rows(current_set)
     local row         = active_rows[row_idx]
     if not row then return end
     local row_str = table.concat(row, '\t')
@@ -762,7 +762,7 @@ function M.open_copy_menu()
   vim.keymap.set('n', 'a', function()
     local current_set = state.result_sets and state.result_sets[state.result_set_index]
     if not current_set then return end
-    local active_rows = get_active_rows(current_set)
+    local active_rows = filter.get_active_rows(current_set)
     local lines = { table.concat(current_set.headers, '\t') }
     for _, row in ipairs(active_rows) do
       table.insert(lines, table.concat(row, '\t'))
