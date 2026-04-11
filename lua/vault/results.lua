@@ -695,7 +695,7 @@ function M.open_copy_menu()
   api.nvim_buf_add_highlight(copy_menu_buf, ns, 'CopyMenuHeader', 5, 0, -1)
   -- Keys
   for _, line_idx in ipairs({ 1, 2, 3, 6 }) do
-    api.nvim_buf_add_highlight(copy_menu_buf, ns, 'CopyMenuKey',   line_idx, 3, 4)
+    api.nvim_buf_add_highlight(copy_menu_buf, ns, 'CopyMenuKey',   line_idx, 3, 5)
     api.nvim_buf_add_highlight(copy_menu_buf, ns, 'CopyMenuLabel', line_idx, 5, -1)
   end
   api.nvim_buf_add_highlight(copy_menu_buf, ns, 'CopyMenuFooter', #menu_lines - 1, 0, -1)
