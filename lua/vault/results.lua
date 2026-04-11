@@ -525,7 +525,7 @@ local function open_export_menu(r_ovr_win)
             -- Header row
             f:write(table.concat(current_set.headers, ',') .. '\n')
             -- Data rows
-            for _, row in ipairs(active_rows.rows) do
+            for _, row in ipairs(active_rows) do
               local escaped = {}
               for _, val in ipairs(row) do
                 -- Wrap in quotes if contains comma, quote or newline
@@ -549,7 +549,7 @@ local function open_export_menu(r_ovr_win)
           
             local out = {}
             table.insert(out, '[')
-            for i, row in ipairs(active_rows.rows) do
+            for i, row in ipairs(active_rows) do
               table.insert(out, '  {')
               for j, h in ipairs(current_set.headers) do
                 local val = tostring(row[j] or '')
@@ -564,7 +564,7 @@ local function open_export_menu(r_ovr_win)
                 local comma = (j < #current_set.headers) and ',' or ''
                 table.insert(out, '    "' .. h .. '": ' .. formatted_val .. comma)
               end
-              local obj_close = (i < #active_rows.rows) and '  },' or '  }'
+              local obj_close = (i < #active_rows) and '  },' or '  }'
               table.insert(out, obj_close)
             end
             table.insert(out, ']')
