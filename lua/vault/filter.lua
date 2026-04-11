@@ -272,6 +272,11 @@ function M.open_search(r_ovr_win, r_ovr_buf)
 
   search_render(r_ovr_win, r_ovr_buf)
 
+  -- place cursor on first data row, first cell
+  local first_row = search_state.active and 2 or 1  -- 2 because line 0 is search bar
+  local first_col = state.row_col_offsets and state.row_col_offsets[1] and state.row_col_offsets[1][1] or 0
+  api.nvim_win_set_cursor(r_ovr_win, { first_row, first_col })
+
   -- Esc: close search, NOT the whole UI
   vim.keymap.set('n', '<Esc>', function()
     M.search_close(r_ovr_win, r_ovr_buf)
