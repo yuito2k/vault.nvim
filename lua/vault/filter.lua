@@ -203,7 +203,7 @@ local function search_update(r_ovr_win, r_ovr_buf)
   search_render(r_ovr_win, r_ovr_buf)
 end
 
-local function get_active_rows(current_set)
+function M.get_active_rows(current_set)
   if M.search_state.active and M.search_state.filtered_rows and #M.search_state.filtered_rows > 0 then
     return M.search_state.filtered_rows
   else
