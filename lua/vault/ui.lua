@@ -624,7 +624,7 @@ M.open_db_float = function()
     },
   })
 
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
 
   if f then

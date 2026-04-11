@@ -112,7 +112,7 @@ function M.trigger_save_connection()
       return
   end
 
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
 
   if f then
@@ -424,7 +424,7 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
       return
     end
 
-    local path = './database.db'
+    local path = state.sys_db
     local f = io.open(path, 'r')
     if not f then return end
     f:close()
@@ -589,7 +589,7 @@ M.edit_db = function()
   end
 
   -- Fetch full record from DB
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
   if not f then return end
   f:close()
@@ -612,7 +612,7 @@ end
 -- Add a function you can call externally when a connection is made
 -- M.connect_db = function ()
 function M.connect_db(ovr_buf, db_id)
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
 
   if f then
@@ -688,7 +688,7 @@ M.delete_db = function()
   for _, word in ipairs(state.db_types) do
     if state.is_connected == false then
       if db_type == word then
-        local path = './database.db'
+        local path = state.sys_db
         local f = io.open(path, 'r')
 
         if f then
@@ -720,7 +720,7 @@ M.delete_db = function()
 
   explorer.render_explorer_tree(buf)
 
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
 
   if f then
@@ -807,7 +807,7 @@ M.disconnect_db = function()
   explorer.render_explorer_tree(ovr_buf)
 
 
-  local path = './database.db'
+  local path = state.sys_db
   local f = io.open(path, 'r')
 
   if f then

@@ -1,6 +1,4 @@
 local api   = vim.api
---local ui = require('vault.ui')
---local results = require('vault.results')
 local state = require('vault.state').state
 
 local M     = {}

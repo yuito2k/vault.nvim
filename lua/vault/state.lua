@@ -1,8 +1,11 @@
 local api = vim.api
+local db = require('vault.db')
+
 local M = {}
 
 M.state = {
   wins = {},
+  sys_db = db.init(),
   parent_win_id = nil,
   tree_highlights = {},  -- populated by render_explorer_tree
   tree_line_map = {},
