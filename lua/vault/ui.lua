@@ -405,7 +405,7 @@ function M.update_ui_state()
         if state.result_sets and #state.result_sets > 1 then
           set_indicator = string.format(' | Press <tab> to change result table', state.result_set_index, #state.result_sets)
         end
-        local left_text = 'Exit: <esc> | Edit: ^u | Delete: ^x | Copy: ^y| Filter: ^/' .. set_indicator
+        local left_text = 'Exit: <esc> | Edit: ^u | Delete: ^x | Copy: ^y | Filter: ^/' .. set_indicator
 
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
