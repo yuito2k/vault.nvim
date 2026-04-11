@@ -636,7 +636,7 @@ function M.open_copy_menu()
 
   -- Close if already open
   if copy_menu_win and api.nvim_win_is_valid(copy_menu_win) then
-    close_copy_menu()
+    M.close_copy_menu()
     return
   end
 
@@ -721,7 +721,7 @@ function M.open_copy_menu()
     flash_cell(r_ovr_buf, cursor[1] - 1, col_start, col_end, 'FlashCell', 300)
     state.last_query_status = 'Copied cell: ' .. cell_value
 
-    close_copy_menu()
+    M.close_copy_menu()
     -- Remove temporary keymaps
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
@@ -748,7 +748,7 @@ function M.open_copy_menu()
     flash_highlight(r_ovr_buf, cursor[1] - 1, cursor[1] - 1, 'FlashRow', 300)
     state.last_query_status = 'Copied row ' .. row_idx
 
-    close_copy_menu()
+    M.close_copy_menu()
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
@@ -774,7 +774,7 @@ function M.open_copy_menu()
     flash_highlight(r_ovr_buf, row_count, row_count + #active_rows - 1, 'FlashRow', 300)
     state.last_query_status = 'Copied ' .. #active_rows .. ' rows'
 
-    close_copy_menu()
+    M.close_copy_menu()
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
@@ -787,7 +787,7 @@ function M.open_copy_menu()
   -- e: Export (placeholder)
   vim.keymap.set('n', '<C-e>', function()
     state.last_query_status = 'Export coming soon...'
-    close_copy_menu()
+    M.close_copy_menu()
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
@@ -799,7 +799,7 @@ function M.open_copy_menu()
 
   -- Esc: close menu
   vim.keymap.set('n', '<Esc>', function()
-    close_copy_menu()
+    M.close_copy_menu()
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
