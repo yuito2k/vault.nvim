@@ -300,7 +300,7 @@ function M.edit_cell()
     -- find the position of the value between the quotes
     local quote_pos = update_sql:find("= '") + 3  -- land right after opening quote
     api.nvim_win_set_cursor(q_ovr_win, { 1, quote_pos - 1 })
-    vim.cmd 'startinsert!'
+    --vim.cmd 'startinsert!'
   end
 end
 
