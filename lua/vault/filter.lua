@@ -277,7 +277,7 @@ local function search_close(r_ovr_win, r_ovr_buf)
   ui.update_ui_state()
 end
 
-local function open_search(r_ovr_win, r_ovr_buf)
+function M.open_search(r_ovr_win, r_ovr_buf)
   if M.search_state.active then
     search_close(r_ovr_win, r_ovr_buf)
     return
