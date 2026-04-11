@@ -712,7 +712,7 @@ function M.open_copy_menu()
     for i, offset in ipairs(offsets) do
       if cursor[2] >= offset then col_idx = i end
     end
-    local active_rows = get_active_rows(current_set)
+    local active_rows = filter.get_active_rows(current_set)
     local cell_value  = active_rows[row_idx] and active_rows[row_idx][col_idx] or ''
     vim.fn.setreg('+', cell_value)
     vim.fn.setreg('"', cell_value)
