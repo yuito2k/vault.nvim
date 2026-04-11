@@ -170,39 +170,6 @@ local function search_update(r_ovr_win, r_ovr_buf)
   search_render(r_ovr_win, r_ovr_buf)
 end
 
-local function search_update(r_ovr_win, r_ovr_buf)
-  local current_set = state.result_sets and state.result_sets[state.result_set_index]
-  if not current_set then return end
-
-  local query = M.search_state.query
-  M.search_state.matches     = {}
-  M.search_state.match_count = 0
-  M.search_state.filtered_rows = {}
-
-  if query == '' then
-    -- Show all rows when query is empty
-    M.search_state.filtered_rows = current_set.rows
-    M.search_state.match_count   = #current_set.rows
-  else
-    local q_lower = query:lower()
-    for _, row in ipairs(current_set.rows) do
-      local matched = false
-      for _, val in ipairs(row) do
-        if tostring(val or ''):lower():find(q_lower, 1, true) then
-          matched = true
-          break
-        end
-      end
-      if matched then
-        table.insert(M.search_state.filtered_rows, row)
-        M.search_state.match_count = M.search_state.match_count + 1
-      end
-    end
-  end
-
-  search_render(r_ovr_win, r_ovr_buf)
-end
-
 function M.get_active_rows(current_set)
   if M.search_state.active and M.search_state.filtered_rows and #M.search_state.filtered_rows > 0 then
     return M.search_state.filtered_rows
@@ -240,15 +207,17 @@ function M.search_close(r_ovr_win, r_ovr_buf)
   api.nvim_buf_clear_namespace(r_ovr_buf, M.search_state.ns, 0, -1)
 
   -- Restore ALL original keymaps for r_ovr_buf
-  vim.keymap.set('n', '<Esc>', M.close_all_windows, { buffer = r_ovr_buf, silent = true })
+  local ui = require('vault.ui')
+  vim.keymap.set('n', '<Esc>', ui.close_all_windows, { buffer = r_ovr_buf, silent = true })
 
-  vim.keymap.set('n', 'e', function() switch_to_win 'overlay' end, { buffer = r_ovr_buf })
-  vim.keymap.set('n', 'q', function() switch_to_win 'query'   end, { buffer = r_ovr_buf })
-  vim.keymap.set('n', 'r', function() switch_to_win 'results' end, { buffer = r_ovr_buf })
+  vim.keymap.set('n', 'e', function() ui.switch_to_win 'overlay' end, { buffer = r_ovr_buf })
+  vim.keymap.set('n', 'q', function() ui.switch_to_win 'query'   end, { buffer = r_ovr_buf })
+  vim.keymap.set('n', 'r', function() ui.switch_to_win 'results' end, { buffer = r_ovr_buf })
 
-  vim.keymap.set('n', '<C-u>', edit_cell,        { buffer = r_ovr_buf, desc = 'Edit cell value' })
-  vim.keymap.set('n', '<C-x>', delete_row,       { buffer = r_ovr_buf, desc = 'Delete row' })
-  vim.keymap.set('n', '<C-y>', open_copy_menu,   { buffer = r_ovr_buf, desc = 'Open copy menu' })
+  local results = require('vault.results')
+  vim.keymap.set('n', '<C-u>', results.edit_cell,        { buffer = r_ovr_buf, desc = 'Edit cell value' })
+  vim.keymap.set('n', '<C-x>', results.delete_row,       { buffer = r_ovr_buf, desc = 'Delete row' })
+  vim.keymap.set('n', '<C-y>', results.open_copy_menu,   { buffer = r_ovr_buf, desc = 'Open copy menu' })
   --vim.keymap.set('n', '<C-/>', function()
   --  open_search(r_ovr_win, r_ovr_buf)
   --end, { buffer = r_ovr_buf, desc = 'Search results' })
@@ -264,23 +233,27 @@ function M.search_close(r_ovr_win, r_ovr_buf)
       end
     end
     if r_ovr_buf_local then
+      local results = require('vault.results')
       results.render_results_table(r_ovr_buf_local, state.result_sets[state.result_set_index])
     end
+    local ui = require('vault.ui')
     ui.update_ui_state()
   end, { buffer = r_ovr_buf })
 
   for _, k in ipairs { 'h', 'l', '<Left>', '<Right>' } do
     vim.keymap.set('n', k, function()
+      local results = require('vault.results')
       results.move_cell(k == 'h' or k == '<Left>' and -1 or 1)
     end, { buffer = r_ovr_buf })
   end
 
+  local ui = require('vault.ui')
   ui.update_ui_state()
 end
 
 function M.open_search(r_ovr_win, r_ovr_buf)
   if M.search_state.active then
-    search_close(r_ovr_win, r_ovr_buf)
+    M.search_close(r_ovr_win, r_ovr_buf)
     return
   end
 
@@ -301,7 +274,7 @@ function M.open_search(r_ovr_win, r_ovr_buf)
 
   -- Esc: close search, NOT the whole UI
   vim.keymap.set('n', '<Esc>', function()
-    search_close(r_ovr_win, r_ovr_buf)
+    M.search_close(r_ovr_win, r_ovr_buf)
   end, { buffer = r_ovr_buf, nowait = true, silent = true })
 
   -- Backspace
