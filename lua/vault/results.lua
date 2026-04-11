@@ -519,6 +519,7 @@ local function open_export_menu(r_ovr_win)
             local f = io.open(filename, 'w')
             if not f then
               state.last_query_status = 'Error: Cannot write to ' .. folder
+              local ui = require('vault.ui')
               ui.update_ui_state()
               return
             end
@@ -543,6 +544,7 @@ local function open_export_menu(r_ovr_win)
             local f = io.open(filename, 'w')
             if not f then
               state.last_query_status = 'Error: Cannot write to ' .. folder
+              local ui = require('vault.ui')
               ui.update_ui_state()
               return
             end
@@ -575,6 +577,7 @@ local function open_export_menu(r_ovr_win)
           end
 
           state.last_query_status = 'Exported ' .. #current_set.rows .. ' rows → ' .. filename
+          local ui = require('vault.ui')
           ui.update_ui_state()
         end)
         return true
