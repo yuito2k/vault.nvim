@@ -214,7 +214,7 @@ end
 -- Copy Menu (Ctrl+Y)
 
 
-local function search_close(r_ovr_win, r_ovr_buf)
+function M.search_close(r_ovr_win, r_ovr_buf)
   if not M.search_state.active then return end
   M.search_state.active      = false
   M.search_state.query       = ''
