@@ -391,7 +391,7 @@ end
 local function restore_esc(r_ovr_buf, r_ovr_win)
   if filter.search_state.active then
     vim.keymap.set('n', '<Esc>', function()
-      search_close(r_ovr_win, r_ovr_buf)
+      filter.search_close(r_ovr_win, r_ovr_buf)
     end, { buffer = r_ovr_buf, nowait = true, silent = true })
   else
     local ui = require('vault.ui')
