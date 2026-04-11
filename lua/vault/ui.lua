@@ -405,7 +405,7 @@ function M.update_ui_state()
         if state.result_sets and #state.result_sets > 1 then
           set_indicator = string.format(' | Press <tab> to change result table', state.result_set_index, #state.result_sets)
         end
-        local left_text = 'Exit: <esc> | Edit: ^u | Delete: ^x' .. set_indicator
+        local left_text = 'Exit: <esc> | Edit: ^u | Delete: ^x | Copy: ^y| Filter: ^/' .. set_indicator
 
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
@@ -460,7 +460,7 @@ function M.update_ui_state()
   for i, line in ipairs(lines) do
     local line_idx = i - 1
 
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -468,7 +468,7 @@ function M.update_ui_state()
       end
     end
 
-    local orange_patterns = { '<enter>', ' ^n ', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^u ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
