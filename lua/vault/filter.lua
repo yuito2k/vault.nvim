@@ -206,8 +206,9 @@ end
 local function get_active_rows(current_set)
   if M.search_state.active and M.search_state.filtered_rows and #M.search_state.filtered_rows > 0 then
     return M.search_state.filtered_rows
+  else
+    return current_set.rows
   end
-  return current_set.rows
 end
 
 -- Copy Menu (Ctrl+Y)
