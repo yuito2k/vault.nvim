@@ -394,6 +394,7 @@ local function restore_esc(r_ovr_buf, r_ovr_win)
       search_close(r_ovr_win, r_ovr_buf)
     end, { buffer = r_ovr_buf, nowait = true, silent = true })
   else
+    local ui = require('vault.ui')
     vim.keymap.set('n', '<Esc>', ui.close_all_windows, { buffer = r_ovr_buf, silent = true })
   end
 end
