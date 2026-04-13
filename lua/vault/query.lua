@@ -511,15 +511,27 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   -- Keymaps on hist_state.buf (NOT q_ovr_buf) so other bufs are unaffected
   local bopts = { buffer = hist_state.buf, nowait = true, silent = true }
 
-  vim.keymap.set('n', 'j', function()
-    hist_state.cursor = math.min(hist_state.cursor + 1, math.max(1, #hist_state.records))
-    hist_render()
-  end, bopts)
+  -- Remove j/k keymaps, replace with CursorMoved autocmd
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    buffer   = hist_state.buf,
+    callback = function()
+      if hist_state.win and vim.api.nvim_win_is_valid(hist_state.win) then
+        local cursor = vim.api.nvim_win_get_cursor(hist_state.win)
+        hist_state.cursor = cursor[1]
+        hist_render()
+      end
+    end,
+  })
 
-  vim.keymap.set('n', 'k', function()
-    hist_state.cursor = math.max(hist_state.cursor - 1, 1)
-    hist_render()
-  end, bopts)
+  --vim.keymap.set('n', 'j', function()
+  --  hist_state.cursor = math.min(hist_state.cursor + 1, math.max(1, #hist_state.records))
+  --  hist_render()
+  --end, bopts)
+
+  --vim.keymap.set('n', 'k', function()
+  --  hist_state.cursor = math.max(hist_state.cursor - 1, 1)
+  --  hist_render()
+  --end, bopts)
 
   vim.keymap.set('n', '<CR>', function()
     local rec = hist_state.records[hist_state.cursor]
