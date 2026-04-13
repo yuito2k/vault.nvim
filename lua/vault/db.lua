@@ -19,8 +19,7 @@ function M.init()
       type TEXT NOT NULL,
       path TEXT NOT NULL
     );
-  ]])
-  db:eval([[
+
     CREATE TABLE IF NOT EXISTS query_history (
       id         TEXT PRIMARY KEY,
       db_id      TEXT NOT NULL,
@@ -29,6 +28,7 @@ function M.init()
       created_at TEXT DEFAULT (datetime('now'))
     );
   ]])
+
   db:close()
   return path
 end

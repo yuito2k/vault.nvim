@@ -318,7 +318,7 @@ function M.execute_query()
 
   -- Save to history
   if state.is_connected and state.db_id then
-    local hist_db = require('sqlite.db'):open(state.db_path_internal)
+    local hist_db = require('sqlite.db'):open(state.sys_db)
     for _, sql in ipairs(statements) do
       local trimmed = sql:match('^%s*(.-)%s*$')
       if trimmed ~= '' then
@@ -435,7 +435,7 @@ local function hist_load()
     hist_state.records = {}
     return
   end
-  local path = state.db_path_internal
+  local path = state.sys_db
   local db   = require('sqlite.db'):open(path)
   local result = db:eval(string.format(
     "SELECT id, query, starred FROM query_history WHERE db_id='%s' ORDER BY starred DESC, created_at DESC;",
@@ -520,7 +520,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   vim.keymap.set('n', '<C-d>', function()
     local rec = hist_state.records[hist_state.cursor]
     if not rec then return end
-    local path = state.db_path_internal
+    local path = state.sys_db
     local db   = require('sqlite.db'):open(path)
     db:eval(string.format("DELETE FROM query_history WHERE id='%s';", rec.id:gsub("'","''")))
     db:close()
@@ -534,7 +534,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
     local rec = hist_state.records[hist_state.cursor]
     if not rec then return end
     local new_starred = rec.starred == 1 and 0 or 1
-    local path = state.db_path_internal
+    local path = state.sys_db
     local db   = require('sqlite.db'):open(path)
     db:eval(string.format(
       "UPDATE query_history SET starred=%d WHERE id='%s';",
