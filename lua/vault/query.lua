@@ -468,7 +468,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   if not state.is_connected or not state.db_id then
     state.last_query_status = 'Not connected to any db at the moment'
     local ui = require('vault.ui')
-    update_ui_state()
+    ui.update_ui_state()
     return
   end
 
