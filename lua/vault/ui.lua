@@ -460,7 +460,7 @@ function M.update_ui_state()
   for i, line in ipairs(lines) do
     local line_idx = i - 1
 
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert Mode:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert:', 'Normal Mode:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -468,7 +468,7 @@ function M.update_ui_state()
       end
     end
 
-    local orange_patterns = { '<enter>', ' ^n ', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
