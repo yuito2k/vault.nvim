@@ -327,10 +327,11 @@ function M.execute_query()
           string.format("SELECT query FROM query_history WHERE db_id='%s' ORDER BY created_at DESC LIMIT 1;",
             state.db_id:gsub("'","''")))
         local last_query = (type(last) == 'table' and last[1]) and last[1].query or ''
+        local con = require('vault.connection')
         if last_query ~= trimmed then
           hist_db:eval(string.format(
             "INSERT INTO query_history (id, db_id, query) VALUES ('%s', '%s', '%s');",
-            generate_id(),
+            con.generate_id(),
             state.db_id:gsub("'","''"),
             trimmed:gsub("'","''")
           ))
