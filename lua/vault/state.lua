@@ -37,6 +37,7 @@ M.state = {
   is_connected = false,
   db_type = nil,
   db_path = nil,
+  db_id = nil,
   db_data = {},
   db_types = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' },
   -- DB tree icons

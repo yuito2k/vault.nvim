@@ -316,8 +316,242 @@ function M.execute_query()
     'Executed %s in %.2fms', stmt_word, total_ms
   )
 
+  -- Save to history
+  if state.is_connected and state.db_id then
+    local hist_db = require('sqlite.db'):open(state.db_path_internal)
+    for _, sql in ipairs(statements) do
+      local trimmed = sql:match('^%s*(.-)%s*$')
+      if trimmed ~= '' then
+        -- avoid duplicate consecutive entries
+        local last = hist_db:eval(
+          string.format("SELECT query FROM query_history WHERE db_id='%s' ORDER BY created_at DESC LIMIT 1;",
+            state.db_id:gsub("'","''")))
+        local last_query = (type(last) == 'table' and last[1]) and last[1].query or ''
+        if last_query ~= trimmed then
+          hist_db:eval(string.format(
+            "INSERT INTO query_history (id, db_id, query) VALUES ('%s', '%s', '%s');",
+            generate_id(),
+            state.db_id:gsub("'","''"),
+            trimmed:gsub("'","''")
+          ))
+        end
+      end
+    end
+    hist_db:close()
+  end
+
   local ui = require('vault.ui')
   ui.update_ui_state()
+end
+
+-- ■■■ Query History (Backspace in normal mode on q_ovr_buf) ■■■
+local hist_state = {
+  win       = nil,
+  buf       = nil,
+  records   = {},   -- { id, query, starred }
+  cursor    = 1,
+  ns        = vim.api.nvim_create_namespace('HistoryHL'),
+}
+
+local function hist_close(q_ovr_win, q_ovr_buf)
+  if hist_state.win and vim.api.nvim_win_is_valid(hist_state.win) then
+    vim.api.nvim_win_close(hist_state.win, true)
+  end
+  if hist_state.buf and vim.api.nvim_buf_is_valid(hist_state.buf) then
+    vim.api.nvim_buf_delete(hist_state.buf, { force = true })
+  end
+  hist_state.win     = nil
+  hist_state.buf     = nil
+  hist_state.records = {}
+  hist_state.cursor  = 1
+
+  -- Remove history keymaps
+  pcall(vim.keymap.del, 'n', '<CR>',  { buffer = q_ovr_buf })
+  pcall(vim.keymap.del, 'n', '<C-d>', { buffer = q_ovr_buf })
+  pcall(vim.keymap.del, 'n', '<Esc>', { buffer = q_ovr_buf })
+  pcall(vim.keymap.del, 'n', 'j',     { buffer = q_ovr_buf })
+  pcall(vim.keymap.del, 'n', 'k',     { buffer = q_ovr_buf })
+  pcall(vim.keymap.del, 'n', '*',     { buffer = q_ovr_buf })
+
+  -- Restore original Esc
+  vim.keymap.set('n', '<Esc>', function()
+    vim.cmd 'stopinsert'
+  end, { buffer = q_ovr_buf, silent = true })
+end
+
+local function hist_render()
+  if not hist_state.buf or not vim.api.nvim_buf_is_valid(hist_state.buf) then return end
+
+  local lines = {}
+  for _, rec in ipairs(hist_state.records) do
+    local prefix = rec.starred == 1 and '* ' or '  '
+    table.insert(lines, prefix .. rec.query)
+  end
+
+  if #lines == 0 then
+    lines = { '  (no history yet)' }
+  end
+
+  vim.api.nvim_buf_set_option(hist_state.buf, 'modifiable', true)
+  vim.api.nvim_buf_set_lines(hist_state.buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(hist_state.buf, 'modifiable', false)
+
+  -- Clear highlights
+  vim.api.nvim_buf_clear_namespace(hist_state.buf, hist_state.ns, 0, -1)
+
+  -- Highlights
+  vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#44475A', fg = '#F8F8F2', bold = true })
+  vim.api.nvim_set_hl(0, 'HistStarred',    { fg = '#F1FA8C', bold = true })
+  vim.api.nvim_set_hl(0, 'HistQuery',      { fg = '#BD93F9' })
+  vim.api.nvim_set_hl(0, 'HistEmpty',      { fg = '#6272A4', italic = true })
+
+  for i, rec in ipairs(hist_state.records) do
+    local line_idx = i - 1
+    if i == hist_state.cursor then
+      vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistCursorLine', line_idx, 0, -1)
+    else
+      if rec.starred == 1 then
+        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistStarred', line_idx, 0, 1)
+        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery',   line_idx, 2, -1)
+      else
+        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery', line_idx, 2, -1)
+      end
+    end
+  end
+
+  if #hist_state.records == 0 then
+    vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistEmpty', 0, 0, -1)
+  end
+
+  -- Move win cursor
+  if hist_state.win and vim.api.nvim_win_is_valid(hist_state.win) then
+    local safe_cursor = math.max(1, math.min(hist_state.cursor, math.max(1, #hist_state.records)))
+    vim.api.nvim_win_set_cursor(hist_state.win, { safe_cursor, 0 })
+  end
+end
+
+local function hist_load()
+  if not state.is_connected or not state.db_id then
+    hist_state.records = {}
+    return
+  end
+  local path = state.db_path_internal
+  local db   = require('sqlite.db'):open(path)
+  local result = db:eval(string.format(
+    "SELECT id, query, starred FROM query_history WHERE db_id='%s' ORDER BY starred DESC, created_at DESC;",
+    state.db_id:gsub("'","''")
+  ))
+  db:close()
+  hist_state.records = (type(result) == 'table') and result or {}
+end
+
+function M.open_history(q_ovr_win, q_ovr_buf)
+  if hist_state.win and vim.api.nvim_win_is_valid(hist_state.win) then
+    hist_close(q_ovr_win, q_ovr_buf)
+    return
+  end
+
+  if not state.is_connected or not state.db_id then
+    state.last_query_status = 'Not connected to any db at the moment'
+    update_ui_state()
+    return
+  end
+
+  hist_load()
+  hist_state.cursor = 1
+
+  hist_state.buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_option(hist_state.buf, 'modifiable', false)
+  vim.api.nvim_buf_set_option(hist_state.buf, 'wrap', false)
+
+  -- Size and position: cover the q_ovr_win
+  local win_width  = vim.api.nvim_win_get_width(q_ovr_win)
+  local win_height = vim.api.nvim_win_get_height(q_ovr_win)
+
+  hist_state.win = vim.api.nvim_open_win(hist_state.buf, false, {
+    relative   = 'win',
+    win        = q_ovr_win,
+    row        = 0,
+    col        = 0,
+    width      = win_width,
+    height     = win_height,
+    style      = 'minimal',
+    border     = 'rounded',
+    title      = ' Query History - ' .. (state.db_type or '') .. ' ',
+    title_pos  = 'left',
+    footer     = ' Select: <enter> · Star: <*> · Delete: <C-d> ',
+    footer_pos = 'right',
+    zindex     = 250,
+  })
+
+  vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#BD93F9' })
+  vim.api.nvim_win_set_option(hist_state.win, 'winhl',    'Normal:Normal,FloatBorder:HistBorder')
+  vim.api.nvim_win_set_option(hist_state.win, 'wrap',     false)
+  vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)
+
+  hist_render()
+
+  local bopts = { buffer = q_ovr_buf, nowait = true, silent = true }
+
+  -- j/k navigation
+  vim.keymap.set('n', 'j', function()
+    hist_state.cursor = math.min(hist_state.cursor + 1, math.max(1, #hist_state.records))
+    hist_render()
+  end, bopts)
+
+  vim.keymap.set('n', 'k', function()
+    hist_state.cursor = math.max(hist_state.cursor - 1, 1)
+    hist_render()
+  end, bopts)
+
+  -- Enter: load selected query into q_ovr_buf
+  vim.keymap.set('n', '<CR>', function()
+    local rec = hist_state.records[hist_state.cursor]
+    if not rec then return end
+    hist_close(q_ovr_win, q_ovr_buf)
+    vim.api.nvim_buf_set_option(q_ovr_buf, 'modifiable', true)
+    vim.api.nvim_buf_set_lines(q_ovr_buf, 0, -1, false, { rec.query })
+    vim.api.nvim_buf_set_option(q_ovr_buf, 'modifiable', false)
+    vim.api.nvim_set_current_win(q_ovr_win)
+  end, bopts)
+
+  -- C-d: delete record
+  vim.keymap.set('n', '<C-d>', function()
+    local rec = hist_state.records[hist_state.cursor]
+    if not rec then return end
+    local path = state.db_path_internal
+    local db   = require('sqlite.db'):open(path)
+    db:eval(string.format("DELETE FROM query_history WHERE id='%s';", rec.id:gsub("'","''")))
+    db:close()
+    hist_load()
+    hist_state.cursor = math.min(hist_state.cursor, math.max(1, #hist_state.records))
+    hist_render()
+  end, bopts)
+
+  -- *: toggle star
+  vim.keymap.set('n', '*', function()
+    local rec = hist_state.records[hist_state.cursor]
+    if not rec then return end
+    local new_starred = rec.starred == 1 and 0 or 1
+    local path = state.db_path_internal
+    local db   = require('sqlite.db'):open(path)
+    db:eval(string.format(
+      "UPDATE query_history SET starred=%d WHERE id='%s';",
+      new_starred, rec.id:gsub("'","''")
+    ))
+    db:close()
+    hist_load()
+    -- keep cursor on same record after reload
+    for i, r in ipairs(hist_state.records) do
+      if r.id == rec.id then hist_state.cursor = i; break end
+    end
+    hist_render()
+  end, bopts)
+
+  -- Esc: close history
+  vim.keymap.set('n', '<Esc>', function()
+    hist_close(q_ovr_win, q_ovr_buf)
+  end, bopts)
 end
 
 return M

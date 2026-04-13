@@ -630,6 +630,7 @@ function M.connect_db(ovr_buf, db_id)
     local db_path = result[1].path
 
     state.db_data = explorer.fetch_dynamic_data(db_path, db_name, db_type, db_id)
+    state.db_id = db_id  -- add this alongside state.db_path, state.db_type etc.
     state.db_path = db_path
     state.db_type = db_type
     state.is_connected = true
@@ -797,6 +798,7 @@ M.disconnect_db = function()
   state.db_data = {} -- Clear the temporary schema data
   state.db_path = nil
   state.db_type = nil
+  state.db_id = nil
     
   -- 2. Clean UI
   api.nvim_buf_set_option(ovr_buf, 'modifiable', true)

@@ -345,9 +345,9 @@ function M.update_ui_state()
         local left_text = nil
 
         if is_insert then
-          left_text  = 'Insert Mode: i | Execute: <enter> | AutoComplete: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+          left_text  = 'Insert: i | Execute: <enter> | AutoComplete: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
         else
-          left_text  = 'Insert Mode: i | Execute: <enter> | History: ^h | Exit: <esc>'
+          left_text = 'Insert: i | Execute: <enter> | History: <BS> | Exit: <esc>'
         end
 
         local right_text = 'Help: ^? | Leader: <space>'
@@ -726,6 +726,9 @@ M.open_db_float = function()
       vim.keymap.set('n', 'r', function()
         M.switch_to_win 'results'
       end, { buffer = b })
+      vim.keymap.set('n', '<BS>', function()
+        query.open_history(q_ovr_win, q_ovr_buf)
+      end, { buffer = q_ovr_buf, desc = 'Query history' })
       vim.keymap.set('n', '<C-u>', results.edit_cell, { buffer = r_ovr_buf, desc = 'Edit cell value' })
       vim.keymap.set('n', '<C-x>', results.delete_row, { buffer = r_ovr_buf, desc = 'Delete row' })
       vim.keymap.set('n', '<C-y>', results.open_copy_menu, { buffer = r_ovr_buf, desc = 'Open copy menu' })
