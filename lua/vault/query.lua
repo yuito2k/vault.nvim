@@ -534,7 +534,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   vim.keymap.set('n', '<C-d>', function()
     local rec = hist_state.records[hist_state.cursor]
     if not rec then return end
-    local path = state.db_path_internal
+    local path = state.sys_db
     local db   = require('sqlite.db'):open(path)
     db:eval(string.format("DELETE FROM query_history WHERE id='%s';", rec.id:gsub("'","''")))
     db:close()
@@ -547,7 +547,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
     local rec = hist_state.records[hist_state.cursor]
     if not rec then return end
     local new_starred = rec.starred == 1 and 0 or 1
-    local path = state.db_path_internal
+    local path = state.sys_db
     local db   = require('sqlite.db'):open(path)
     db:eval(string.format(
       "UPDATE query_history SET starred=%d WHERE id='%s';",
