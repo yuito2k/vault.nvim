@@ -470,12 +470,12 @@ function M.open_history(q_ovr_win, q_ovr_buf)
     border     = 'rounded',
     title      = ' Query History — ' .. (state.db_type or '') .. ' ',
     title_pos  = 'left',
-    footer     = ' Select: <enter> · Star: <*> · Delete: <C-d> ',
+    footer     = ' Select: <enter> · Star: <*> · Delete: <^d> ',
     footer_pos = 'right',
     zindex     = 300,
   })
 
-  vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#BD93F9' })
+  vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#8BE9FD' })
   vim.api.nvim_win_set_option(hist_state.win, 'winhl',     'Normal:Normal,FloatBorder:HistBorder')
   vim.api.nvim_win_set_option(hist_state.win, 'wrap',      false)
   vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)

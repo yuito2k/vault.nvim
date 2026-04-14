@@ -445,7 +445,7 @@ local function open_export_menu(r_ovr_win)
     footer_pos = 'right',
   })
 
-  api.nvim_set_hl(0, 'ExportMenuBorder', { fg = '#BD93F9' })
+  api.nvim_set_hl(0, 'ExportMenuBorder', { fg = '#8BE9FD' })
   api.nvim_win_set_option(export_menu_win, 'winhl', 'Normal:Normal,FloatBorder:ExportMenuBorder')
 
   local ns = api.nvim_create_namespace('ExportMenuHL')
@@ -678,11 +678,11 @@ function M.open_copy_menu()
   })
 
   -- Highlights
-  api.nvim_set_hl(0, 'CopyMenuBorder',  { fg = '#6272A4' })
+  api.nvim_set_hl(0, 'CopyMenuBorder',  { fg = '#8BE9FD' })
   api.nvim_set_hl(0, 'CopyMenuHeader',  { fg = '#F8F8F2', bold = true })
   api.nvim_set_hl(0, 'CopyMenuKey',     { fg = '#FFB86C', bold = true })
   api.nvim_set_hl(0, 'CopyMenuLabel',   { fg = '#8BE9FD' })
-  api.nvim_set_hl(0, 'CopyMenuFooter',  { fg = '#6272A4', italic = true })
+  api.nvim_set_hl(0, 'CopyMenuFooter',  { fg = '#8BE9FD', italic = true })
   api.nvim_set_hl(0, 'FlashRow',        { bg = '#50FA7B', fg = '#282a36', bold = true })
   api.nvim_set_hl(0, 'FlashCell',       { bg = '#FFB86C', fg = '#282a36', bold = true })
 
