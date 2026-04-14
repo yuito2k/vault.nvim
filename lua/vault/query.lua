@@ -478,7 +478,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#8BE9FD' })
   vim.api.nvim_win_set_option(hist_state.win, 'winhl',     'Normal:Normal,FloatBorder:HistBorder,FloatTitle:FloatTitleActive')
   vim.api.nvim_win_set_option(hist_state.win, 'wrap',      false)
-  --vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)
+  vim.api.nvim_win_set_option(hist_state.win, 'cursorline', true)
 
   hist_render()
 
