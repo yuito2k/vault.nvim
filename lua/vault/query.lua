@@ -400,9 +400,9 @@ local function hist_render()
     else
       if rec.starred == 1 then
         vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistStarred', line_idx, 0, 1)
-        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery',   line_idx, 2, -1)
+        --vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery',   line_idx, 2, -1)
       else
-        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery', line_idx, 2, -1)
+        --vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery', line_idx, 2, -1)
       end
     end
   end
@@ -476,7 +476,6 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   })
 
   vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#8BE9FD' })
-  --vim.api.nvim_set_hl(0, 'FloatTitleActive', { fg = '#8BE9FD', bg = 'NONE', bold = true })
   vim.api.nvim_win_set_option(hist_state.win, 'winhl',     'Normal:Normal,FloatBorder:HistBorder,FloatTitle:FloatTitleActive')
   vim.api.nvim_win_set_option(hist_state.win, 'wrap',      false)
   vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)
