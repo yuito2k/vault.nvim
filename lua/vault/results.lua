@@ -446,7 +446,7 @@ local function open_export_menu(r_ovr_win)
   })
 
   api.nvim_set_hl(0, 'ExportMenuBorder', { fg = '#8BE9FD' })
-  api.nvim_win_set_option(export_menu_win, 'winhl', 'Normal:Normal,FloatBorder:ExportMenuBorder')
+  api.nvim_win_set_option(export_menu_win, 'winhl', 'Normal:Normal,FloatBorder:ExportMenuBorder,FloatTitle:FloatTitleActive')
 
   local ns = api.nvim_create_namespace('ExportMenuHL')
   api.nvim_buf_add_highlight(export_menu_buf, ns, 'CopyMenuHeader', 0, 0, -1)
@@ -686,7 +686,7 @@ function M.open_copy_menu()
   api.nvim_set_hl(0, 'FlashRow',        { bg = '#50FA7B', fg = '#282a36', bold = true })
   api.nvim_set_hl(0, 'FlashCell',       { bg = '#FFB86C', fg = '#282a36', bold = true })
 
-  api.nvim_win_set_option(copy_menu_win, 'winhl', 'Normal:Normal,FloatBorder:CopyMenuBorder')
+  api.nvim_win_set_option(copy_menu_win, 'winhl', 'Normal:Normal,FloatBorder:CopyMenuBorder,FloatTitle:FloatTitleActive')
 
   local ns = api.nvim_create_namespace('CopyMenuHL')
   -- Section headers
