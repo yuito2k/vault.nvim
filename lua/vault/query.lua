@@ -388,7 +388,7 @@ local function hist_render()
   vim.api.nvim_buf_clear_namespace(hist_state.buf, hist_state.ns, 0, -1)
 
   -- Highlights
-  vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#44475A', bold = true })
+  vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#292e42', bold = true })
   vim.api.nvim_set_hl(0, 'HistStarred',    { fg = '#F1FA8C', bold = true })
   vim.api.nvim_set_hl(0, 'HistQuery',      { fg = '#BD93F9' })
   vim.api.nvim_set_hl(0, 'HistEmpty',      { fg = '#6272A4', italic = true })
@@ -457,7 +457,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   local ui     = vim.api.nvim_list_uis()[1]
   local width  = math.floor(ui.width  * 0.6)
   local height = math.floor(ui.height * 0.6)
-  local row    = math.floor((ui.height - height) / 3)
+  local row    = math.floor((ui.height - height) / 3.5)
   local col    = math.floor((ui.width  - width)  / 2)
 
   hist_state.win = vim.api.nvim_open_win(hist_state.buf, true, { -- true = focus it
