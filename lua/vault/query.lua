@@ -372,7 +372,7 @@ local function hist_render()
 
   local lines = {}
   for _, rec in ipairs(hist_state.records) do
-    local prefix = rec.starred == 1 and '* ' or '  '
+    local prefix = rec.starred == 1 and '  * ' or '    '
     table.insert(lines, prefix .. rec.query)
   end
 
@@ -388,7 +388,7 @@ local function hist_render()
   vim.api.nvim_buf_clear_namespace(hist_state.buf, hist_state.ns, 0, -1)
 
   -- Highlights
-  vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#44475A', fg = '#F8F8F2', bold = true })
+  vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#44475A', bold = true })
   vim.api.nvim_set_hl(0, 'HistStarred',    { fg = '#F1FA8C', bold = true })
   vim.api.nvim_set_hl(0, 'HistQuery',      { fg = '#BD93F9' })
   vim.api.nvim_set_hl(0, 'HistEmpty',      { fg = '#6272A4', italic = true })
