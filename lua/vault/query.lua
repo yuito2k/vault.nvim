@@ -457,7 +457,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   local ui     = vim.api.nvim_list_uis()[1]
   local width  = math.floor(ui.width  * 0.6)
   local height = math.floor(ui.height * 0.6)
-  local row    = math.floor((ui.height - height) / 2)
+  local row    = math.floor((ui.height - height) / 4)
   local col    = math.floor((ui.width  - width)  / 2)
 
   hist_state.win = vim.api.nvim_open_win(hist_state.buf, true, { -- true = focus it
