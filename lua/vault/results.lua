@@ -413,7 +413,7 @@ local function close_export_menu()
   export_menu_buf = nil
 end
 
-local function open_export_menu(r_ovr_win)
+local function open_export_menu(r_ovr_win, r_ovr_buf)
   close_export_menu()
 
   export_menu_buf = api.nvim_create_buf(false, true)
@@ -439,7 +439,7 @@ local function open_export_menu(r_ovr_win)
     height     = menu_h,
     style      = 'minimal',
     border     = 'rounded',
-    focusable  = false,
+    focusable  = true,
     zindex     = 300,
     footer     = ' Close: <esc> ',
     footer_pos = 'right',
@@ -456,13 +456,14 @@ local function open_export_menu(r_ovr_win)
   api.nvim_buf_add_highlight(export_menu_buf, ns, 'CopyMenuLabel',  2, 5, -1)
   api.nvim_buf_add_highlight(export_menu_buf, ns, 'CopyMenuFooter', #menu_lines - 1, 0, -1)
 
-  local r_ovr_buf = api.nvim_win_get_buf(r_ovr_win)
+  local bopts = { buffer = export_menu_buf, nowait = true, silent = true }
 
   local function cleanup()
     close_export_menu()
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'j', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    api.nvim_set_current_win(r_ovr_win)
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'j', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
   end
 
@@ -584,8 +585,6 @@ local function open_export_menu(r_ovr_win)
     }
   end
 
-  local bopts = { buffer = r_ovr_buf, nowait = true, silent = true }
-
   vim.keymap.set('n', 'c', function() do_export('csv')  end, bopts)
   vim.keymap.set('n', 'j', function() do_export('json') end, bopts)
   vim.keymap.set('n', '<Esc>', function() cleanup() end, bopts)
@@ -671,7 +670,7 @@ function M.open_copy_menu()
     height    = menu_h,
     style     = 'minimal',
     border    = 'rounded',
-    focusable = false,
+    focusable = true,
     zindex    = 300,
     footer    = ' Close: <esc> ',
     footer_pos = 'right',
@@ -701,7 +700,7 @@ function M.open_copy_menu()
 
   -- Keymaps on r_ovr_buf while menu is open
   local r_ovr_buf = api.nvim_win_get_buf(r_ovr_win)
-  local bopts = { buffer = r_ovr_buf, nowait = true, silent = true }
+  local bopts = { buffer = copy_menu_buf, nowait = true, silent = true }
 
   -- c: Copy cell
   vim.keymap.set('n', 'c', function()
@@ -725,6 +724,8 @@ function M.open_copy_menu()
     state.last_query_status = 'Copied cell: ' .. cell_value
 
     M.close_copy_menu()
+    api.nvim_set_current_win(r_ovr_win)
+
     -- Remove temporary keymaps
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
@@ -753,6 +754,8 @@ function M.open_copy_menu()
     state.last_query_status = 'Copied row ' .. row_idx
 
     M.close_copy_menu()
+    api.nvim_set_current_win(r_ovr_win)
+
     pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
     pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
@@ -780,11 +783,13 @@ function M.open_copy_menu()
     state.last_query_status = 'Copied ' .. #active_rows .. ' rows'
 
     M.close_copy_menu()
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<C-e>', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    api.nvim_set_current_win(r_ovr_win)
+
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'y', bopts)
+    pcall(vim.keymap.del, 'n', 'a', bopts)
+    pcall(vim.keymap.del, 'n', '<C-e>', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
     local ui = require('vault.ui')
     ui.update_ui_state()
@@ -794,23 +799,25 @@ function M.open_copy_menu()
   vim.keymap.set('n', '<C-e>', function()
     state.last_query_status = 'Export coming soon...'
     M.close_copy_menu()
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<C-e>', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'y', bopts)
+    pcall(vim.keymap.del, 'n', 'a', bopts)
+    pcall(vim.keymap.del, 'n', '<C-e>', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
-    open_export_menu(r_ovr_win)
+    open_export_menu(r_ovr_win, r_ovr_buf)
   end, bopts)
 
   -- Esc: close menu
   vim.keymap.set('n', '<Esc>', function()
     M.close_copy_menu()
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<C-e>', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    api.nvim_set_current_win(r_ovr_win)
+
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'y', bopts)
+    pcall(vim.keymap.del, 'n', 'a', bopts)
+    pcall(vim.keymap.del, 'n', '<C-e>', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
   end, bopts)
 end
