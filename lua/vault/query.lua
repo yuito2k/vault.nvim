@@ -390,7 +390,7 @@ local function hist_render()
   -- Highlights
   vim.api.nvim_set_hl(0, 'HistCursorLine', { bg = '#292e42', bold = true })
   vim.api.nvim_set_hl(0, 'HistStarred',    { fg = '#F1FA8C', bold = true })
-  vim.api.nvim_set_hl(0, 'HistQuery',      { fg = '#BD93F9' })
+  vim.api.nvim_set_hl(0, 'HistQuery',      { fg = '#7aa2f7' })
   vim.api.nvim_set_hl(0, 'HistEmpty',      { fg = '#6272A4', italic = true })
 
   for i, rec in ipairs(hist_state.records) do
@@ -400,9 +400,9 @@ local function hist_render()
     else
       if rec.starred == 1 then
         vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistStarred', line_idx, 0, 2)
-        --vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery',   line_idx, 2, -1)
+        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery',   line_idx, 2, -1)
       else
-        --vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery', line_idx, 2, -1)
+        vim.api.nvim_buf_add_highlight(hist_state.buf, hist_state.ns, 'HistQuery', line_idx, 2, -1)
       end
     end
   end
