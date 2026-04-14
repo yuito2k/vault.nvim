@@ -372,7 +372,7 @@ local function hist_render()
 
   local lines = {}
   for _, rec in ipairs(hist_state.records) do
-    local prefix = rec.starred == 1 and '  * ' or '    '
+    local prefix = rec.starred == 1 and '  ★ ' or '    '
     table.insert(lines, prefix .. rec.query)
   end
 
@@ -478,7 +478,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
   vim.api.nvim_set_hl(0, 'HistBorder', { fg = '#8BE9FD' })
   vim.api.nvim_win_set_option(hist_state.win, 'winhl',     'Normal:Normal,FloatBorder:HistBorder,FloatTitle:FloatTitleActive')
   vim.api.nvim_win_set_option(hist_state.win, 'wrap',      false)
-  vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)
+  --vim.api.nvim_win_set_option(hist_state.win, 'cursorline', false)
 
   hist_render()
 
