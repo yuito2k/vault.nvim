@@ -501,9 +501,7 @@ function M.open_history(q_ovr_win, q_ovr_buf)
     local rec = hist_state.records[hist_state.cursor]
     if not rec then return end
     hist_close(q_ovr_win, q_ovr_buf)
-    vim.api.nvim_buf_set_option(q_ovr_buf, 'modifiable', true)
     vim.api.nvim_buf_set_lines(q_ovr_buf, 0, -1, false, { rec.query })
-    vim.api.nvim_buf_set_option(q_ovr_buf, 'modifiable', false)
     vim.api.nvim_set_current_win(q_ovr_win)
   end, bopts)
 
