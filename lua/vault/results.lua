@@ -430,7 +430,7 @@ local function open_export_menu(r_ovr_win, r_ovr_buf)
   local win_height = api.nvim_win_get_height(r_ovr_win)
   local menu_w, menu_h = 32, #menu_lines
 
-  export_menu_win = api.nvim_open_win(export_menu_buf, false, {
+  export_menu_win = api.nvim_open_win(export_menu_buf, true, {
     relative   = 'win',
     win        = r_ovr_win,
     row        = win_height - menu_h - 1,
@@ -661,7 +661,7 @@ function M.open_copy_menu()
   local win_height = api.nvim_win_get_height(r_ovr_win)
   local menu_w, menu_h = 32, #menu_lines
 
-  copy_menu_win = api.nvim_open_win(copy_menu_buf, false, {
+  copy_menu_win = api.nvim_open_win(copy_menu_buf, true, {
     relative  = 'win',
     win       = r_ovr_win,
     row       = win_height - menu_h - 1,
@@ -727,11 +727,11 @@ function M.open_copy_menu()
     api.nvim_set_current_win(r_ovr_win)
 
     -- Remove temporary keymaps
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<C-e>', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'y', bopts)
+    pcall(vim.keymap.del, 'n', 'a', bopts)
+    pcall(vim.keymap.del, 'n', '<C-e>', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
     local ui = require('vault.ui')
     ui.update_ui_state()
@@ -756,11 +756,11 @@ function M.open_copy_menu()
     M.close_copy_menu()
     api.nvim_set_current_win(r_ovr_win)
 
-    pcall(vim.keymap.del, 'n', 'c', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'y', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', 'a', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<C-e>', { buffer = r_ovr_buf })
-    pcall(vim.keymap.del, 'n', '<Esc>', { buffer = r_ovr_buf })
+    pcall(vim.keymap.del, 'n', 'c', bopts)
+    pcall(vim.keymap.del, 'n', 'y', bopts)
+    pcall(vim.keymap.del, 'n', 'a', bopts)
+    pcall(vim.keymap.del, 'n', '<C-e>', bopts)
+    pcall(vim.keymap.del, 'n', '<Esc>', bopts)
     restore_esc(r_ovr_buf, r_ovr_win)
     local ui = require('vault.ui')
     ui.update_ui_state()
