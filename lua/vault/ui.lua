@@ -245,7 +245,7 @@ function M.update_ui_state()
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
       
         local win_width  = api.nvim_win_get_width(b_win) - 2
-        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Refresh: ^f | Exit: <esc>'
+        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Refresh: ^r | Exit: <esc>'
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
       
