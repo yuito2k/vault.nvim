@@ -240,6 +240,69 @@ function M.render_explorer_tree(buf)
   api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
+-- ■■■ Refresh Explorer Tree ■■■
+local function refresh_explorer_tree()
+  if not state.is_connected or not state.db_path or not state.root_node_id then
+    state.last_query_status = 'Not connected to any database'
+    local ui = require('vault.ui')
+    ui.update_ui_state()
+    return
+  end
+
+  -- Save current open_nodes state before refresh
+  local saved_open_nodes = {}
+  for k, v in pairs(state.open_nodes) do
+    saved_open_nodes[k] = v
+  end
+
+  -- Re-fetch schema data
+  local db_name = state.root_node_id
+  local db_type = state.db_type
+  local db_path = state.db_path
+  local db_id   = nil
+
+  -- Get db_id from current db_data
+  if state.db_data[db_name] then
+    db_id = state.db_data[db_name].id
+  end
+
+  -- Re-fetch fresh schema
+  state.db_data = M.fetch_dynamic_data(db_path, db_name, db_type, db_id)
+
+  -- Restore open_nodes — keep existing states, init new nodes as closed
+  state.open_nodes = {}
+  for k, v in pairs(saved_open_nodes) do
+    state.open_nodes[k] = v
+  end
+
+  -- Make sure new tables default to closed if not in saved state
+  for node_id, node in pairs(state.db_data) do
+    if node.type == 'table' and state.open_nodes[node_id] == nil then
+      state.open_nodes[node_id] = false
+    end
+    if node.type == 'folder' and state.open_nodes[node_id] == nil then
+      state.open_nodes[node_id] = false
+    end
+  end
+
+  -- Re-render the explorer tree
+  local ovr_buf = nil
+  for id, name in pairs(state.wins) do
+    if name == 'overlay' then
+      ovr_buf = api.nvim_win_get_buf(id)
+      break
+    end
+  end
+
+  if ovr_buf then
+    M.render_explorer_tree(ovr_buf)
+  end
+
+  state.last_query_status = 'Explorer refreshed'
+  local ui = require('vault.ui')
+  ui.update_ui_state()
+end
+
 function M.toggle_node()
   local win = api.nvim_get_current_win()
   local buf = api.nvim_win_get_buf(win)

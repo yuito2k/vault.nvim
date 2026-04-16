@@ -245,7 +245,7 @@ function M.update_ui_state()
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
       
         local win_width  = api.nvim_win_get_width(b_win) - 2
-        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Exit: <esc>'
+        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Refresh: ^f | Exit: <esc>'
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
       
@@ -345,7 +345,7 @@ function M.update_ui_state()
         local left_text = nil
 
         if is_insert then
-          left_text  = 'Insert: i | Execute: <enter> | AutoComplete: <tab> | Next: ^n | Previous: ^p | History: ^h | Exit: <esc>'
+          left_text  = 'Normal: <esc> | Execute: <enter> | AutoComplete: <tab> | Next: ^n | Previous: ^p | History: ^h '
         else
           left_text = 'Insert: i | Execute: <enter> | History: <BS> | Exit: <esc>'
         end
@@ -460,7 +460,7 @@ function M.update_ui_state()
   for i, line in ipairs(lines) do
     local line_idx = i - 1
 
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert:', 'Normal Mode:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert:', 'Normal:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -468,7 +468,7 @@ function M.update_ui_state()
       end
     end
 
-    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^f ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
@@ -729,6 +729,10 @@ M.open_db_float = function()
       vim.keymap.set('n', '<BS>', function()
         query.open_history(q_ovr_win, q_ovr_buf)
       end, { buffer = q_ovr_buf, desc = 'Query history' })
+      -- in the keymaps loop where you register for all windows
+      vim.keymap.set('n', '<C-f>', function()
+        explorer.refresh_explorer_tree()
+      end, { buffer = ovr_buf, desc = 'Refresh explorer tree' })
       vim.keymap.set('n', '<C-u>', results.edit_cell, { buffer = r_ovr_buf, desc = 'Edit cell value' })
       vim.keymap.set('n', '<C-x>', results.delete_row, { buffer = r_ovr_buf, desc = 'Delete row' })
       vim.keymap.set('n', '<C-y>', results.open_copy_menu, { buffer = r_ovr_buf, desc = 'Open copy menu' })
