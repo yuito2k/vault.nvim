@@ -241,7 +241,7 @@ function M.render_explorer_tree(buf)
 end
 
 -- ■■■ Refresh Explorer Tree ■■■
-local function refresh_explorer_tree()
+function M.refresh_explorer_tree()
   if not state.is_connected or not state.db_path or not state.root_node_id then
     state.last_query_status = 'Not connected to any database'
     local ui = require('vault.ui')
