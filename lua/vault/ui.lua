@@ -468,7 +468,7 @@ function M.update_ui_state()
       end
     end
 
-    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^f ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^r ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then
@@ -730,7 +730,7 @@ M.open_db_float = function()
         query.open_history(q_ovr_win, q_ovr_buf)
       end, { buffer = q_ovr_buf, desc = 'Query history' })
       -- in the keymaps loop where you register for all windows
-      vim.keymap.set('n', '<C-f>', function()
+      vim.keymap.set('n', '<C-r>', function()
         explorer.refresh_explorer_tree()
       end, { buffer = ovr_buf, desc = 'Refresh explorer tree' })
       vim.keymap.set('n', '<C-u>', results.edit_cell, { buffer = r_ovr_buf, desc = 'Edit cell value' })
