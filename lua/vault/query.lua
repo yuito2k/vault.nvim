@@ -316,6 +316,35 @@ function M.execute_query()
     'Executed %s in %.2fms', stmt_word, total_ms
   )
 
+  -- Auto-refresh explorer on DDL
+  -- Check if any statement was a DDL query
+  local ddl_pattern = '^%s*[Cc][Rr][Ee][Aa][Tt][Ee]%s+[Tt][Aa][Bb][Ll][Ee]'
+               .. '|^%s*[Dd][Rr][Oo][Pp]%s+[Tt][Aa][Bb][Ll][Ee]'
+               .. '|^%s*[Aa][Ll][Tt][Ee][Rr]%s+[Tt][Aa][Bb][Ll][Ee]'
+
+  local function is_ddl(sql)
+    local s = sql:match('^%s*(.-)%s*$'):upper()
+    return s:match('^CREATE%s+TABLE')
+        or s:match('^DROP%s+TABLE')
+        or s:match('^ALTER%s+TABLE')
+  end
+
+  local needs_refresh = false
+  for _, sql in ipairs(statements) do
+    if is_ddl(sql) then needs_refresh = true; break end
+  end
+
+  if needs_refresh and state.is_connected then
+    vim.schedule(function()
+      local explorer = require('vault.explorer')
+      explorer.refresh_explorer_tree()
+      state.last_query_status = string.format(
+        'Executed %s in %.2fms · Explorer refreshed', stmt_word, total_ms)
+      local ui = require('vault.ui')
+      ui.update_ui_state()
+    end)
+  end
+
   -- Save to history
   if state.is_connected and state.db_id then
     local hist_db = require('sqlite.db'):open(state.sys_db)
