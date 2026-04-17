@@ -240,6 +240,70 @@ function M.render_explorer_tree(buf)
   api.nvim_buf_set_option(buf, 'modifiable', false)
 end
 
+-- ■■■ Select Top 100 (Ctrl+S) ■■■
+function M.select_top_100()
+  if not state.is_connected then
+    state.last_query_status = 'Not connected to any database'
+    local ui = require('vault.ui')
+    ui.update_ui_state()
+    return
+  end
+
+  -- Get current line in overlay
+  local ovr_win = nil
+  local ovr_buf = nil
+  for id, name in pairs(state.wins) do
+    if name == 'overlay' then
+      ovr_win = id
+      ovr_buf = api.nvim_win_get_buf(id)
+      break
+    end
+  end
+
+  if not ovr_win then return end
+
+  local cursor_row = api.nvim_win_get_cursor(ovr_win)[1]
+  local node_id    = state.tree_line_map and state.tree_line_map[cursor_row - 1]
+
+  if not node_id then
+    state.last_query_status = 'No node selected'
+    local ui = require('vault.ui')
+    ui.update_ui_state()
+    return
+  end
+
+  -- Get node data
+  local node = state.db_data[node_id]
+  if not node or node.type ~= 'table' then
+    state.last_query_status = 'Cursor is not on a table'
+    local ui = require('vault.ui')
+    ui.update_ui_state()
+    return
+  end
+
+  -- Build query
+  local sql = string.format('SELECT * FROM %s LIMIT 100;', node_id)
+
+  -- Write into query buffer
+  for id, name in pairs(state.wins) do
+    if name == 'q_overlay' then
+      local qbuf = api.nvim_win_get_buf(id)
+      api.nvim_buf_set_option(qbuf, 'modifiable', true)
+      api.nvim_buf_set_lines(qbuf, 0, -1, false, { sql })
+      api.nvim_buf_set_option(qbuf, 'modifiable', false)
+      break
+    end
+  end
+
+  -- Execute it
+  local query = require('vault.query')
+  query.execute_query()
+
+  -- Switch focus to results
+  local ui = require('vault.ui')
+  ui.switch_to_win 'r_overlay'
+end
+
 -- ■■■ Refresh Explorer Tree ■■■
 function M.refresh_explorer_tree()
   if not state.is_connected or not state.db_path or not state.root_node_id then

@@ -765,6 +765,12 @@ M.open_db_float = function()
       if name == 'overlay' then
         api.nvim_buf_set_keymap(ovr_buf, 'n', '<CR>', [[<cmd>lua require'vault.explorer'.toggle_node()<CR>]], { noremap = true, silent = true })
       end
+      if name == 'overlay' then
+        vim.keymap.set('n', '<C-s>', explorer.select_top_100, {
+          buffer = ovr_buf,
+          desc   = 'Select top 100 rows from table',
+        })
+      end
       if name == 'query' then
         vim.keymap.set('i', '<Tab>', function()
           local confirmed = query.suggest_confirm(q_ovr_win)
