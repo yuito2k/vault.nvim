@@ -700,19 +700,19 @@ function M.render_connection_ui()
   update_focus()
 end
 
-function M.render_edit_connection_ui(db_id, row)
-  if row.type == "PostgreSQL" or row.type == "MySQL" then
-    edit_state.pg_fields[1].value = row.name
-    edit_state.pg_fields[2].value = row.type
-    edit_state.pg_fields[3].value = row.server
-    edit_state.pg_fields[4].value = row.port
-    edit_state.pg_fields[5].value = row.database
-    edit_state.pg_fields[6].value = row.username
-    edit_state.pg_fields[7].value = row.password
+function M.render_edit_connection_ui(db_id, db_result)
+  if db_result.type == "PostgreSQL" or db_result.type == "MySQL" then
+    edit_state.pg_fields[1].value = db_result.name
+    edit_state.pg_fields[2].value = db_result.type
+    edit_state.pg_fields[3].value = db_result.server
+    edit_state.pg_fields[4].value = db_result.port
+    edit_state.pg_fields[5].value = db_result.database
+    edit_state.pg_fields[6].value = db_result.username
+    edit_state.pg_fields[7].value = db_result.password
   else
-    edit_state.fields[1].value = row.name
-    edit_state.fields[2].value = row.type
-    edit_state.fields[3].value = row.path
+    edit_state.fields[1].value = db_result.name
+    edit_state.fields[2].value = db_result.type
+    edit_state.fields[3].value = db_result.path
   end
 
   -- Focus overlay first (same pattern as render_connection_ui)
@@ -856,7 +856,7 @@ function M.render_edit_connection_ui(db_id, row)
     db:close()
   end
 
-  if row.type == "PostgreSQL" or row.type == "MySQL" then
+  if db_result.type == "PostgreSQL" or db_result.type == "MySQL" then
     -- Close existing pg field windows
     for _, win in ipairs(edit_state.pg_wins) do
       if vim.api.nvim_win_is_valid(win) then
@@ -1012,7 +1012,7 @@ function M.render_edit_connection_ui(db_id, row)
         edit_state.pg_wins    = {}
         edit_state.wins = {}
         edit_state.main_win = nil
-        
+
         api.nvim_win_close(edit_state.main_win, true)
         for id, name in pairs(state.wins) do
           if name == 'overlay' and api.nvim_win_is_valid(id) then
