@@ -321,15 +321,16 @@ function M.show_dropdown_picker(field, parent_win)
 
     -- Toggle PostgreSQL fields
     local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
-    if is_pg ~= conn_state.is_pg_mode then
-      conn_state.is_pg_mode = is_pg
+    --if is_pg ~= conn_state.is_pg_mode then
+    if line == 'PostgreSQL' or line == 'MySQL' then
+      conn_state.is_pg_mode = true
 
       for i, win in ipairs(conn_state.wins) do
         api.nvim_win_close(win, true)
       end
 
       show_pg_fields(conn_state.main_win, nil)
-    else
+    elseif line == 'SQLite' then
       for i, win in ipairs(conn_state.pg_wins) do
         api.nvim_win_close(win, true)
       end
