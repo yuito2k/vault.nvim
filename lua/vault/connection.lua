@@ -295,176 +295,6 @@ local function show_sql_fields(main_win, ibuf_list)
   update_focus()
 end
 
-local function show_edit_pg_fields(main_win)
-  -- Close existing pg field windows
-  for _, win in ipairs(edit_state.pg_wins) do
-    if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
-    end
-  end
-  edit_state.pg_wins = {}
-
-  if not edit_state.is_pg_mode then return end
-
-  for i, field in ipairs(edit_state.pg_fields) do
-    local ibuf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
-
-    local win = vim.api.nvim_open_win(ibuf, true, {
-      relative = 'win',
-      win      = main_win,
-      row      = field.row,
-      col      = field.col - 5,
-      width    = field.width,
-      height   = 1,
-      title    = field.name,
-      style    = 'minimal',
-      border   = 'rounded',
-      zindex   = 260,
-    })
-    edit_state.pg_wins[i] = win
-
-    -- hint text styling
-    vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
-
-    local bopts = { buffer = ibuf, silent = true }
-
-    vim.keymap.set('n', '<Tab>', function()
-      -- Tab cycles through pg fields
-      edit_state.active_idx = (edit_state.active_idx % 
-        (#edit_state.pg_fields)) + 1
-
-      update_edit_focus()
-    end, bopts)
-
-    vim.keymap.set('n', '<CR>', function()
-      if field.type == 'dropdown' then
-        -- Trigger the new picker function
-        M.show_dropdown_picker(field, edit_state.pg_wins[i])
-      else
-        vim.cmd 'startinsert!'
-      end
-    end, bopts)
-
-    vim.keymap.set('n', 's', function()
-      M.trigger_save_connection()
-    end, bopts)
-
-    vim.keymap.set('n', '<Esc>', function()
-      for _, w in ipairs(edit_state.wins) do
-        if vim.api.nvim_win_is_valid(w) then
-          vim.api.nvim_win_close(w, true)
-        end
-      end
-      for _, w in ipairs(edit_state.pg_wins) do
-        if vim.api.nvim_win_is_valid(w) then
-          vim.api.nvim_win_close(w, true)
-        end
-      end
-      vim.api.nvim_win_close(edit_state.main_win, true)
-
-      edit_state.is_pg_mode = false
-      edit_state.pg_wins    = {}
-      edit_state.wins = {}
-      edit_state.main_win = nil
-
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
-          vim.api.nvim_set_current_win(id)
-          return
-        end
-      end
-    end, bopts)
-  end
-end
-
-local function show_edit_sql_fields(main_win)
-  -- Create field windows (same layout as render_connection_ui)
-  for i, field in ipairs(edit_state.fields) do
-    local ibuf = api.nvim_create_buf(false, true)
-    api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
-
-    local win = api.nvim_open_win(ibuf, false, {
-      relative = 'win',
-      win = main_win,
-      row = field.row,
-      col = field.col - 5,
-      width = field.width,
-      height = 1,
-      title = field.name ~= 'Browser' and field.name or nil,
-      style = 'minimal',
-      border = 'rounded',
-      zindex = 260,
-    })
-    edit_state.wins[i] = win
-
-    local bopts = { buffer = ibuf, silent = true }
-
-    vim.keymap.set('n', '<Tab>', function()
-      edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
-      update_edit_focus()
-    end, bopts)
-
-    vim.keymap.set('n', 's', function()
-      trigger_update_connection()
-    end, bopts)
-
-    vim.keymap.set('n', '<CR>', function()
-      if field.type == 'button' then
-        local path_field = edit_state.fields[i - 1]
-        local field_win = edit_state.wins[i - 1]
-        local field_buf = api.nvim_win_get_buf(field_win)
-        require('telescope').extensions.file_browser.file_browser {
-          cwd = vim.fn.expand '$HOME',
-          prompt_title = 'Select Database File',
-          attach_mappings = function(prompt_bufnr, _)
-            vim.schedule(function()
-              local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
-              for _, win_key in ipairs { 'prompt_win', 'results_win', 'preview_win' } do
-                if picker[win_key] and api.nvim_win_is_valid(picker[win_key]) then
-                  api.nvim_win_set_config(picker[win_key], { border = 'rounded', zindex = 400 })
-                end
-              end
-            end)
-            local actions = require 'telescope.actions'
-            local action_state = require 'telescope.actions.state'
-            actions.select_default:replace(function()
-              local selection = action_state.get_selected_entry()
-              actions.close(prompt_bufnr)
-              path_field.value = selection.path
-              api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
-            end)
-            return true
-          end,
-        }
-      elseif field.type == 'dropdown' then
-        M.show_dropdown_picker(field, edit_state.wins[i])
-      else
-        vim.cmd 'startinsert!'
-      end
-    end, bopts)
-
-    vim.keymap.set('n', '<Esc>', function()
-      for _, win in ipairs(edit_state.wins) do
-        api.nvim_win_close(win, true)
-      end
-
-      edit_state.is_pg_mode = false
-      edit_state.pg_wins    = {}
-      edit_state.wins = {}
-      edit_state.main_win = nil
-
-      api.nvim_win_close(edit_state.main_win, true)
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and api.nvim_win_is_valid(id) then
-          api.nvim_set_current_win(id)
-          return
-        end
-      end
-    end, bopts)
-  end
-end
-
 function M.generate_id()
   -- Get current time in seconds since the epoch as a number (float in standard Lua)
   local timestamp = os.time() --
@@ -1027,9 +857,171 @@ function M.render_edit_connection_ui(db_id, db_result)
   end
 
   if db_result.type == "PostgreSQL" or db_result.type == "MySQL" then
-    show_edit_pg_fields(edit_state.main_win)
+    -- Close existing pg field windows
+    for _, win in ipairs(edit_state.pg_wins) do
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+    end
+    edit_state.pg_wins = {}
+
+    if not edit_state.is_pg_mode then return end
+
+    for i, field in ipairs(edit_state.pg_fields) do
+      local ibuf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+      local win = vim.api.nvim_open_win(ibuf, true, {
+        relative = 'win',
+        win      = edit_state.main_win,
+        row      = field.row,
+        col      = field.col - 5,
+        width    = field.width,
+        height   = 1,
+        title    = field.name,
+        style    = 'minimal',
+        border   = 'rounded',
+        zindex   = 260,
+      })
+      edit_state.pg_wins[i] = win
+
+      -- hint text styling
+      vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+
+      local bopts = { buffer = ibuf, silent = true }
+
+      vim.keymap.set('n', '<Tab>', function()
+        -- Tab cycles through pg fields
+        edit_state.active_idx = (edit_state.active_idx % 
+          (#edit_state.pg_fields)) + 1
+
+        update_edit_focus()
+      end, bopts)
+
+      vim.keymap.set('n', '<CR>', function()
+        if field.type == 'dropdown' then
+          -- Trigger the new picker function
+          M.show_dropdown_picker(field, edit_state.pg_wins[i])
+        else
+          vim.cmd 'startinsert!'
+        end
+      end, bopts)
+
+      vim.keymap.set('n', 's', function()
+        M.trigger_save_connection()
+      end, bopts)
+
+      vim.keymap.set('n', '<Esc>', function()
+        for _, w in ipairs(edit_state.wins) do
+          if vim.api.nvim_win_is_valid(w) then
+            vim.api.nvim_win_close(w, true)
+          end
+        end
+        for _, w in ipairs(edit_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(w) then
+            vim.api.nvim_win_close(w, true)
+          end
+        end
+        vim.api.nvim_win_close(edit_state.main_win, true)
+
+        edit_state.is_pg_mode = false
+        edit_state.pg_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
+
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+            vim.api.nvim_set_current_win(id)
+            return
+          end
+        end
+      end, bopts)
+    end
   else
-    fdd
+    -- Create field windows (same layout as render_connection_ui)
+    for i, field in ipairs(edit_state.fields) do
+      local ibuf = api.nvim_create_buf(false, true)
+      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+      local win = api.nvim_open_win(ibuf, false, {
+        relative = 'win',
+        win = edit_state.main_win,
+        row = field.row,
+        col = field.col - 5,
+        width = field.width,
+        height = 1,
+        title = field.name ~= 'Browser' and field.name or nil,
+        style = 'minimal',
+        border = 'rounded',
+        zindex = 260,
+      })
+      edit_state.wins[i] = win
+
+      local bopts = { buffer = ibuf, silent = true }
+
+      vim.keymap.set('n', '<Tab>', function()
+        edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
+        update_edit_focus()
+      end, bopts)
+
+      vim.keymap.set('n', 's', function()
+        trigger_update_connection()
+      end, bopts)
+
+      vim.keymap.set('n', '<CR>', function()
+        if field.type == 'button' then
+          local path_field = edit_state.fields[i - 1]
+          local field_win = edit_state.wins[i - 1]
+          local field_buf = api.nvim_win_get_buf(field_win)
+          require('telescope').extensions.file_browser.file_browser {
+            cwd = vim.fn.expand '$HOME',
+            prompt_title = 'Select Database File',
+            attach_mappings = function(prompt_bufnr, _)
+              vim.schedule(function()
+                local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
+                for _, win_key in ipairs { 'prompt_win', 'results_win', 'preview_win' } do
+                  if picker[win_key] and api.nvim_win_is_valid(picker[win_key]) then
+                    api.nvim_win_set_config(picker[win_key], { border = 'rounded', zindex = 400 })
+                  end
+                end
+              end)
+              local actions = require 'telescope.actions'
+              local action_state = require 'telescope.actions.state'
+              actions.select_default:replace(function()
+                local selection = action_state.get_selected_entry()
+                actions.close(prompt_bufnr)
+                path_field.value = selection.path
+                api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
+              end)
+              return true
+            end,
+          }
+        elseif field.type == 'dropdown' then
+          M.show_dropdown_picker(field, edit_state.wins[i])
+        else
+          vim.cmd 'startinsert!'
+        end
+      end, bopts)
+
+      vim.keymap.set('n', '<Esc>', function()
+        for _, win in ipairs(edit_state.wins) do
+          api.nvim_win_close(win, true)
+        end
+
+        edit_state.is_pg_mode = false
+        edit_state.pg_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
+
+        api.nvim_win_close(edit_state.main_win, true)
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
+            return
+          end
+        end
+      end, bopts)
+    end
   end
 
   update_edit_focus()
