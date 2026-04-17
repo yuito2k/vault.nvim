@@ -4,6 +4,7 @@ local explorer = require('vault.explorer')
 
 local M = {}
 
+local function_coming_from = nil
 local conn_state = {
   active_idx = 1,
   fields = {
@@ -540,7 +541,11 @@ function M.show_dropdown_picker(field, parent_win)
         api.nvim_win_close(win, true)
       end
 
-      show_pg_fields(conn_state.main_win, nil)
+      if function_coming_from == "New_Connection" then
+        show_pg_fields(conn_state.main_win, nil)
+      else
+        show_edit_pg_fields(edit_state.main_win)
+      end
     elseif line == 'SQLite' then
       conn_state.is_pg_mode = false
 
@@ -552,7 +557,11 @@ function M.show_dropdown_picker(field, parent_win)
         api.nvim_win_close(win, true)
       end
 
-      show_sql_fields(conn_state.main_win, nil)
+      if function_coming_from == "New_Connection" then
+        show_sql_fields(conn_state.main_win, nil)
+      else
+        show_edit_sql_fields(edit_state.main_win)
+      end
     end
   end, { buffer = buf, silent = true })
 
@@ -716,6 +725,7 @@ function M.trigger_save_connection()
 end
 
 function M.render_connection_ui()
+  function_coming_from = "New_Connection"
   for id, name in pairs(state.wins) do
     if name == 'overlay' and api.nvim_win_is_valid(id) then
       api.nvim_set_current_win(id)
@@ -883,6 +893,7 @@ function M.render_connection_ui()
 end
 
 function M.render_edit_connection_ui(db_id, db_result)
+  function_coming_from = "Edit_Connection"
   if db_result.type == "PostgreSQL" or db_result.type == "MySQL" then
     edit_state.pg_fields[1].value = db_result.name
     edit_state.pg_fields[2].value = db_result.type
