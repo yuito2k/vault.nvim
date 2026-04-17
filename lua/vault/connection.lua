@@ -237,112 +237,113 @@ function M.trigger_save_connection()
     f:close()
 
     if conn_state.is_pg_mode then
-    -- PostgreSQL / MySQL connection string
-    local server   = get_pg_field_text(1)
-    local port     = get_pg_field_text(2)
-    local database = get_pg_field_text(3)
-    local username = get_pg_field_text(4)
-    local password = get_pg_field_text(5)
+      -- PostgreSQL / MySQL connection string
+      local server   = get_pg_field_text(1)
+      local port     = get_pg_field_text(2)
+      local database = get_pg_field_text(3)
+      local username = get_pg_field_text(4)
+      local password = get_pg_field_text(5)
 
-    -- Build connection string as the "path"
-    local conn_str = string.format(
-      '%s://%s:%s@%s:%s/%s',
-      selected_type:lower(),
-      username, password, server, port, database
-    )
+      -- Build connection string as the "path"
+      local conn_str = string.format(
+        '%s://%s:%s@%s:%s/%s',
+        selected_type:lower(),
+        username, password, server, port, database
+      )
 
-    -- Save to db
-    local path = state.db_path_internal
-    local db   = require('sqlite.db'):open(path)
-    local db_id = generate_id()
-    local insert_query = string.format(
-      [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
-      db_id:gsub("'","''"),
-      typed_name:gsub("'","''"),
-      selected_type:gsub("'","''"),
-      conn_str:gsub("'","''")
-    )
-    local success, err = pcall(function() db:eval(insert_query) end)
-    if success then
-      -- refresh overlay list same as SQLite save
-      -- ... same overlay refresh code ...
-      for _, w in ipairs(conn_state.wins) do
-        if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
-      end
-      for _, w in ipairs(conn_state.pg_wins) do
-        if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
-      end
-      vim.api.nvim_win_close(conn_state.main_win, true)
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
-          vim.api.nvim_set_current_win(id)
-          return
+      -- Save to db
+      local path = state.db_path_internal
+      local db   = require('sqlite.db'):open(path)
+      local db_id = generate_id()
+      local insert_query = string.format(
+        [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
+        db_id:gsub("'","''"),
+        typed_name:gsub("'","''"),
+        selected_type:gsub("'","''"),
+        conn_str:gsub("'","''")
+      )
+      local success, err = pcall(function() db:eval(insert_query) end)
+      if success then
+        -- refresh overlay list same as SQLite save
+        -- ... same overlay refresh code ...
+        for _, w in ipairs(conn_state.wins) do
+          if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
         end
+        for _, w in ipairs(conn_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
+        end
+        vim.api.nvim_win_close(conn_state.main_win, true)
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+            vim.api.nvim_set_current_win(id)
+            return
+          end
+        end
+      else
+        print('Database Error: ' .. tostring(err))
       end
+      db:close()
     else
-      print('Database Error: ' .. tostring(err))
-    end
-    db:close()
-  else
-    local db = require('sqlite.db'):open(path)
-    local db_id = M.generate_id()
+      local db = require('sqlite.db'):open(path)
+      local db_id = M.generate_id()
 
-    local insert_query = string.format(
-      [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
-      db_id:gsub("'", "''"),
-      typed_name:gsub("'", "''"), -- Escape single quotes to prevent SQL injection
-      selected_type:gsub("'", "''"),
-      typed_path:gsub("'", "''")
-    )
+      local insert_query = string.format(
+        [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
+        db_id:gsub("'", "''"),
+        typed_name:gsub("'", "''"), -- Escape single quotes to prevent SQL injection
+        selected_type:gsub("'", "''"),
+        typed_path:gsub("'", "''")
+      )
 
-    local success, err = pcall(function()
-      db:eval(insert_query) -- Replace 'db' with your actual database handler object
-    end)
+      local success, err = pcall(function()
+        db:eval(insert_query) -- Replace 'db' with your actual database handler object
+      end)
 
-    if success then
-      --print("Successfully saved connection: " .. typed_name)
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' then
-            local ovr_buf = vim.api.nvim_win_get_buf(id)
-            api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
-            api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+      if success then
+        --print("Successfully saved connection: " .. typed_name)
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' then
+              local ovr_buf = vim.api.nvim_win_get_buf(id)
+              api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+              api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
-            --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-            local line_content = '  ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
+              --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+              local line_content = '  ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
 
-            -- 1. Get the content of the very first line (index 0 to 1)
-            local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+              -- 1. Get the content of the very first line (index 0 to 1)
+              local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
 
-            -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
-            if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
-                -- Replace the empty first line
-                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
-            else
-                -- Append a new line at the very end
-                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
-            end
+              -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+              if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+                  -- Replace the empty first line
+                  vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                  -- Append a new line at the very end
+                  vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
 
-            api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
-            break
+              api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+              break
+          end
         end
-      end
 
-      for i, win in ipairs(conn_state.wins) do
-        api.nvim_win_close(win, true)
-      end
-      api.nvim_win_close(conn_state.main_win, true)
-      -- TODO:  later replace with switch_to_win('overlay') the exact same thing
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and api.nvim_win_is_valid(id) then
-          api.nvim_set_current_win(id)
-          return
+        for i, win in ipairs(conn_state.wins) do
+          api.nvim_win_close(win, true)
         end
+        api.nvim_win_close(conn_state.main_win, true)
+        -- TODO:  later replace with switch_to_win('overlay') the exact same thing
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
+            return
+          end
+        end
+      elseif not success then
+        print("Database Error: " .. tostring(err))
       end
-    elseif not success then
-      print("Database Error: " .. tostring(err))
-    end
 
-    db:close()
+      db:close()
+    end
   end
 end
 
