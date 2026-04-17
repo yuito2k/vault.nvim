@@ -212,8 +212,6 @@ function M.edit_cell()
 
   last_sql = state.last_select_sql
 
-  print('working 1')
-  
   if not r_ovr_win or not api.nvim_win_is_valid(r_ovr_win) then return end
   print('working 2')
   if api.nvim_get_current_win() ~= r_ovr_win then return end
