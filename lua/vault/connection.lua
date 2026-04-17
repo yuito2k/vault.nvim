@@ -492,6 +492,15 @@ function M.render_connection_ui()
       for i, win in ipairs(conn_state.wins) do
         api.nvim_win_close(win, true)
       end
+
+      if conn_state.is_pg_mode then
+        for _, win in ipairs(conn_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
+          end
+        end
+      end
+      
       api.nvim_win_close(conn_state.main_win, true)
       -- TODO:  later replace with switch_to_win('overlay') the exact same thing
       for id, name in pairs(state.wins) do
