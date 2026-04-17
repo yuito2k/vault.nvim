@@ -245,7 +245,7 @@ function M.update_ui_state()
         api.nvim_buf_set_lines(b_buf, 0, 1, false, { connection_status })
       
         local win_width  = api.nvim_win_get_width(b_win) - 2
-        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Refresh: ^r | Exit: <esc>'
+        local left_text  = 'Connect: <enter> | New: ^n | Edit: ^e | Close: ^c | Delete: ^d | Refresh: ^r | Top 100: ^s | Exit: <esc>'
         local right_text = 'Help: ^? | Leader: <space>'
         local space_count = win_width - #left_text - #right_text - 1
       
@@ -460,7 +460,7 @@ function M.update_ui_state()
   for i, line in ipairs(lines) do
     local line_idx = i - 1
 
-    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert:', 'Normal:' }
+    local labels = { 'Connect:', 'New:', 'Edit:', 'Exit:', 'Top 100:', 'AutoComplete:', 'Next:', 'Copy:', 'Filter:', 'Previous:', 'Leader:', 'Refresh:', 'Help:', 'Delete:', 'Execute:', 'History:', 'Close:', 'Insert:', 'Normal:' }
     for _, word in ipairs(labels) do
       local s, e = line:find(word)
       if s then
@@ -468,7 +468,7 @@ function M.update_ui_state()
       end
     end
 
-    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^r ', ' ^p ', ' ^u ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
+    local orange_patterns = { '<enter>', ' ^n ', '<BS>', '<space>', '<tab>', ' ^? ', ' ^r ', ' ^p ', ' ^u ', ' ^s ', ' ^y ', ' ^/ ', ' ^x ', ' ^e ', ' ^c ', ' ^d ', ' i ', ' ^h ', '<esc>' }
     for _, pat in ipairs(orange_patterns) do
       local s, e = line:find(pat)
       if s then

@@ -288,9 +288,7 @@ function M.select_top_100()
   for id, name in pairs(state.wins) do
     if name == 'q_overlay' then
       local qbuf = api.nvim_win_get_buf(id)
-      api.nvim_buf_set_option(qbuf, 'modifiable', true)
       api.nvim_buf_set_lines(qbuf, 0, -1, false, { sql })
-      api.nvim_buf_set_option(qbuf, 'modifiable', false)
       break
     end
   end
