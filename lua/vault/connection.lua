@@ -141,6 +141,135 @@ local function show_pg_fields(main_win, ibuf_list)
   update_focus()
 end
 
+local function show_sql_fields(main_win, ibuf_list)
+  -- 1. Clear any old windows if re-opening
+  for _, win in pairs(conn_state.pg_wins) do
+    if api.nvim_win_is_valid(win) then
+      api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.wins = {}
+
+  -- 2. Create ALL field windows immediately
+  for i, field in ipairs(conn_state.fields) do
+    local ibuf = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+    local win = api.nvim_open_win(ibuf, false, { -- open as false (don't focus yet)
+      relative = 'win',
+      win = conn_state.main_win,
+      row = field.row,
+      col = field.col - 5,
+      width = field.width,
+      height = 1,
+      title = field.name ~= 'Browser' and field.name or nil,
+      style = 'minimal',
+      border = 'rounded',
+      zindex = 260,
+    })
+    conn_state.wins[i] = win
+
+    -- Set common keymaps for every field buffer
+    local opts = { buffer = ibuf, silent = true }
+    vim.keymap.set('n', '<Tab>', function()
+      conn_state.active_idx = (conn_state.active_idx % #conn_state.fields) + 1
+      update_focus()
+    end, opts)
+
+    local opts = { buffer = ibuf, silent = true }
+    vim.keymap.set('n', 's', function()
+      M.trigger_save_connection()
+    end, opts)
+
+    -- ENTER to edit (simplified)
+    vim.keymap.set('n', '<CR>', function()
+      if field.type == 'button' then
+        local path_field = conn_state.fields[i - 1] -- Assumes Path input is right before the Button
+        local field_win = conn_state.wins[i - 1]
+        local field_buf = api.nvim_win_get_buf(field_win)
+
+        -- or you can use require('telescope.builtin').find_files {
+        require('telescope').extensions.file_browser.file_browser {
+          path = vim.fn.expand '%:p:h', -- Start at current file -- remove this line if use find_files
+          cwd = vim.fn.expand '$HOME', -- OR start at Home to fix your issue -- remove this line if use find_files
+          prompt_title = 'Select Database File',
+          attach_mappings = function(prompt_bufnr, map)
+            -- Schedule ensures the windows exist before we try to modify them
+            vim.schedule(function()
+              local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
+
+              -- Set zindex for the main prompt window
+              if picker.prompt_win and api.nvim_win_is_valid(picker.prompt_win) then
+                api.nvim_win_set_config(picker.prompt_win, { border = 'rounded', zindex = 400 })
+              end
+
+              -- Set zindex for the results window
+              if picker.results_win and api.nvim_win_is_valid(picker.results_win) then
+                api.nvim_win_set_config(picker.results_win, { border = 'rounded', zindex = 400 })
+              end
+
+              -- Set zindex for the preview window
+              if picker.preview_win and api.nvim_win_is_valid(picker.preview_win) then
+                api.nvim_win_set_config(picker.preview_win, { border = 'rounded', zindex = 400 })
+              end
+            end)
+
+            local actions = require 'telescope.actions'
+            local action_state = require 'telescope.actions.state'
+
+            actions.select_default:replace(function()
+              local selection = action_state.get_selected_entry()
+              actions.close(prompt_bufnr)
+
+              -- Update state and UI
+              path_field.value = selection.path
+              api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
+            end)
+            return true
+          end,
+        }
+      elseif field.type == 'dropdown' then
+        -- Trigger the new picker function
+        M.show_dropdown_picker(field, conn_state.wins[i])
+      else
+        vim.cmd 'startinsert!'
+      end
+    end, opts)
+
+    -- ESC to close everything
+    vim.keymap.set('n', '<esc>', function()
+      for i, win in ipairs(conn_state.wins) do
+        api.nvim_win_close(win, true)
+      end
+
+      if conn_state.is_pg_mode then
+        for _, win in ipairs(conn_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
+          end
+        end
+      end
+
+      api.nvim_win_close(conn_state.main_win, true)
+
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
+
+      -- TODO:  later replace with switch_to_win('overlay') the exact same thing
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and api.nvim_win_is_valid(id) then
+          api.nvim_set_current_win(id)
+          return
+        end
+      end
+    end, opts)
+  end
+
+  update_focus()
+end
+
 function M.generate_id()
   -- Get current time in seconds since the epoch as a number (float in standard Lua)
   local timestamp = os.time() --
@@ -195,25 +324,17 @@ function M.show_dropdown_picker(field, parent_win)
     if is_pg ~= conn_state.is_pg_mode then
       conn_state.is_pg_mode = is_pg
 
-      -- Hide/show path field and browser button
-      --local path_win    = conn_state.wins[3]
-      --local browser_win = conn_state.wins[4]
-      --if path_win and vim.api.nvim_win_is_valid(path_win) then
-      --  vim.api.nvim_win_set_config(path_win, {
-      --    hide = is_pg  -- hide path field for network DBs
-      --  })
-      --end
-      --if browser_win and vim.api.nvim_win_is_valid(browser_win) then
-      --  vim.api.nvim_win_set_config(browser_win, {
-      --    hide = is_pg
-      --  })
-      --end
-
       for i, win in ipairs(conn_state.wins) do
         api.nvim_win_close(win, true)
       end
 
       show_pg_fields(conn_state.main_win, nil)
+    else
+      for i, win in ipairs(conn_state.pg_wins) do
+        api.nvim_win_close(win, true)
+      end
+
+      show_sql_fields(conn_state.main_win, nil)
     end
   end, { buffer = buf, silent = true })
 
