@@ -202,21 +202,22 @@ function M.edit_cell()
   local r_ovr_win = nil
   local last_sql = nil
 
-  --for id, name in pairs(state.wins) do
-  --  if name == 'r_overlay' then r_ovr_win = id end
-  --  if name == 'q_overlay' then
-  --    local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(id), 0, -1, false)
-  --    last_sql = table.concat(lines, ' '):match('^%s*(.-)%s*$')
-  --  end
-  --end
+  for id, name in pairs(state.wins) do
+    if name == 'r_overlay' then r_ovr_win = id end
+    if name == 'q_overlay' then
+      --local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(id), 0, -1, false)
+      --last_sql = table.concat(lines, ' '):match('^%s*(.-)%s*$')
+      last_sql = state.last_select_sql
+    end
+  end
 
-  last_sql = state.last_select_sql
+  --last_sql = state.last_select_sql
 
   if not r_ovr_win or not api.nvim_win_is_valid(r_ovr_win) then return end
-  print('working 2')
+  --print('working 2')
   if api.nvim_get_current_win() ~= r_ovr_win then return end
 
-  print('working 3')
+  --print('working 3')
 
   local table_name = last_sql and last_sql:match('[Ff][Rr][Oo][Mm]%s+["\']?(%w+)["\']?')
   print(table_name)
