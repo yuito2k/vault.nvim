@@ -83,7 +83,7 @@ local function show_pg_fields(main_win, ibuf_list)
     vim.keymap.set('n', '<Tab>', function()
       -- Tab cycles through pg fields
       conn_state.active_idx = (conn_state.active_idx % 
-        (#conn_state.fields + #conn_state.pg_fields)) + 1
+        (#conn_state.pg_fields)) + 1
       
       update_focus()
     end, bopts)
