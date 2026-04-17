@@ -189,7 +189,6 @@ function M.show_dropdown_picker(field, parent_win)
       for i, win in ipairs(conn_state.wins) do
         api.nvim_win_close(win, true)
       end
-      api.nvim_win_close(conn_state.main_win, true)
 
       show_pg_fields(conn_state.main_win, nil)
     end
@@ -500,7 +499,7 @@ function M.render_connection_ui()
           end
         end
       end
-      
+
       api.nvim_win_close(conn_state.main_win, true)
       -- TODO:  later replace with switch_to_win('overlay') the exact same thing
       for id, name in pairs(state.wins) do
