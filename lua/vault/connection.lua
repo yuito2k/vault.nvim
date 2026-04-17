@@ -15,7 +15,7 @@ local conn_state = {
   -- PostgreSQL extra fields (hidden by default)
   pg_fields = {
     { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
-    { name = ' Database Type ', value = 'SQLite', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+    { name = ' Database Type ', value = 'PostgreSQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
     { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
     { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 10 },
     { name = ' Database ', value = '',          type = 'input', row = 16, col = 6,  width = 75 },
@@ -61,7 +61,7 @@ local function show_pg_fields(main_win, ibuf_list)
     local ibuf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = vim.api.nvim_open_win(ibuf, false, {
+    local win = vim.api.nvim_open_win(ibuf, true, {
       relative = 'win',
       win      = main_win,
       row      = field.row,
