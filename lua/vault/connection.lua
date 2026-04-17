@@ -14,6 +14,8 @@ local conn_state = {
   },
   -- PostgreSQL extra fields (hidden by default)
   pg_fields = {
+    { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
+    { name = ' Database Type ', value = 'SQLite', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
     { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
     { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 10 },
     { name = ' Database ', value = '',          type = 'input', row = 16, col = 6,  width = 75 },
@@ -171,18 +173,23 @@ function M.show_dropdown_picker(field, parent_win)
       conn_state.is_pg_mode = is_pg
 
       -- Hide/show path field and browser button
-      local path_win    = conn_state.wins[3]
-      local browser_win = conn_state.wins[4]
-      if path_win and vim.api.nvim_win_is_valid(path_win) then
-        vim.api.nvim_win_set_config(path_win, {
-          hide = is_pg  -- hide path field for network DBs
-        })
+      --local path_win    = conn_state.wins[3]
+      --local browser_win = conn_state.wins[4]
+      --if path_win and vim.api.nvim_win_is_valid(path_win) then
+      --  vim.api.nvim_win_set_config(path_win, {
+      --    hide = is_pg  -- hide path field for network DBs
+      --  })
+      --end
+      --if browser_win and vim.api.nvim_win_is_valid(browser_win) then
+      --  vim.api.nvim_win_set_config(browser_win, {
+      --    hide = is_pg
+      --  })
+      --end
+
+      for i, win in ipairs(conn_state.wins) do
+        api.nvim_win_close(win, true)
       end
-      if browser_win and vim.api.nvim_win_is_valid(browser_win) then
-        vim.api.nvim_win_set_config(browser_win, {
-          hide = is_pg
-        })
-      end
+      api.nvim_win_close(conn_state.main_win, true)
 
       show_pg_fields(conn_state.main_win, nil)
     end
