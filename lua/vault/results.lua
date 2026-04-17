@@ -217,6 +217,7 @@ function M.edit_cell()
   if api.nvim_get_current_win() ~= r_ovr_win then return end
 
   local table_name = last_sql and last_sql:match('[Ff][Rr][Oo][Mm]%s+["\']?(%w+)["\']?')
+  print(table_name)
   if not table_name then
     state.last_query_status = 'Cannot determine source table'
     local ui = require('vault.ui')
