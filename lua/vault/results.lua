@@ -211,6 +211,7 @@ function M.edit_cell()
   --end
 
   last_sql = state.last_select_sql
+  print(last_sql)
 
   if not r_ovr_win or not api.nvim_win_is_valid(r_ovr_win) then return end
   if api.nvim_get_current_win() ~= r_ovr_win then return end
