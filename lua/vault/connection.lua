@@ -81,18 +81,6 @@ function update_focus()
   end
 end
 
--- Local update_focus for edit popup
-local function update_edit_focus()
-  for i, win in ipairs(edit_state.wins) do
-    if i == edit_state.active_idx then
-      api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
-      api.nvim_set_current_win(win)
-    else
-      api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
-    end
-  end
-end
-
 local function show_pg_fields(main_win, ibuf_list)
   -- Close existing pg field windows
   for _, win in ipairs(conn_state.pg_wins) do
@@ -941,6 +929,18 @@ function M.render_edit_connection_ui(db_id, db_result)
     end
   end
   edit_state.wins = {}
+
+  -- Local update_focus for edit popup
+  local function update_edit_focus()
+    for i, win in ipairs(edit_state.wins) do
+      if i == edit_state.active_idx then
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_set_current_win(win)
+      else
+        api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+      end
+    end
+  end
 
   -- Save handler (UPDATE instead of INSERT)
   local function trigger_update_connection()
