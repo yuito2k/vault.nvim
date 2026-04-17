@@ -20,7 +20,7 @@ local conn_state = {
     { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 10 },
     { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
     { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
-    { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 36 },
+    { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 37 },
   },
   is_pg_mode = false,
   pg_wins    = {},
@@ -118,6 +118,12 @@ local function show_pg_fields(main_win, ibuf_list)
         end
       end
       vim.api.nvim_win_close(conn_state.main_win, true)
+
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
+
       for id, name in pairs(state.wins) do
         if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
           vim.api.nvim_set_current_win(id)
@@ -126,6 +132,8 @@ local function show_pg_fields(main_win, ibuf_list)
       end
     end, bopts)
   end
+
+  update_focus()
 end
 
 function M.generate_id()
@@ -511,6 +519,12 @@ function M.render_connection_ui()
       end
 
       api.nvim_win_close(conn_state.main_win, true)
+
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
+
       -- TODO:  later replace with switch_to_win('overlay') the exact same thing
       for id, name in pairs(state.wins) do
         if name == 'overlay' and api.nvim_win_is_valid(id) then
