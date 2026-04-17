@@ -1029,7 +1029,7 @@ function M.render_edit_connection_ui(db_id, db_result)
   if db_result.type == "PostgreSQL" or db_result.type == "MySQL" then
     show_edit_pg_fields(edit_state.main_win)
   else
-    show_edit_sql_fields(edit_state.main_win)
+    fdd
   end
 
   update_edit_focus()
