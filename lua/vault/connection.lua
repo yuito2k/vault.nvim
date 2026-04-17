@@ -20,7 +20,7 @@ local conn_state = {
     { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 10 },
     { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
     { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
-    { name = ' Password ', value = 'secret',          type = 'input', row = 21, col = 44, width = 35 },
+    { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 36 },
   },
   is_pg_mode = false,
   pg_wins    = {},
