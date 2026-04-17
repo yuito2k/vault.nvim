@@ -11,6 +11,7 @@ M.state = {
   tree_line_map = {},
   result_sets = {},
   result_set_index = 1,
+  last_select_sql = nil,
   ns = api.nvim_create_namespace 'DbUI_NS',
   overlay_ns = api.nvim_create_namespace 'ExplorerOverlayNS',
   q_overlay_ns = api.nvim_create_namespace 'QueryOverlayNS',

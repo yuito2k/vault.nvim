@@ -799,6 +799,7 @@ M.disconnect_db = function()
   state.db_path = nil
   state.db_type = nil
   state.db_id = nil
+  state.last_select_sql = nil
     
   -- 2. Clean UI
   api.nvim_buf_set_option(ovr_buf, 'modifiable', true)

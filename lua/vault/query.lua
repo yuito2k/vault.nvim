@@ -345,6 +345,14 @@ function M.execute_query()
     end)
   end
 
+  for _, sql in ipairs(statements) do
+    local trimmed = sql:match('^%s*(.-)%s*$'):upper()
+    if trimmed:match('^SELECT') then
+      state.last_select_sql = sql
+      break
+    end
+  end
+
   -- Save to history
   if state.is_connected and state.db_id then
     local hist_db = require('sqlite.db'):open(state.sys_db)
