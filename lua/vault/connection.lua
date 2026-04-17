@@ -30,18 +30,28 @@ local conn_state = {
 
 -- 3. Function to update which one is "Bright"
 function update_focus()
-  local all_wins = {}
-  for _, w in ipairs(conn_state.wins) do table.insert(all_wins, w) end
-  for _, w in ipairs(conn_state.pg_wins) do table.insert(all_wins, w) end
+  if conn_state.is_pg_mode then
 
-  for i, win in ipairs(all_wins) do
-    if i == conn_state.active_idx then
-      -- Active: Bright Border/Text
-      api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
-      api.nvim_set_current_win(win)
-    else
-      -- Inactive: Dimmed (Comment color usually works well for dimming)
-      api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+    for i, win in ipairs(conn_state.pg_wins) do
+      if i == conn_state.active_idx then
+        -- Active: Bright Border/Text
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_set_current_win(win)
+      else
+        -- Inactive: Dimmed (Comment color usually works well for dimming)
+        api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+      end
+    end
+  else
+    for i, win in ipairs(conn_state.wins) do
+      if i == conn_state.active_idx then
+        -- Active: Bright Border/Text
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_set_current_win(win)
+      else
+        -- Inactive: Dimmed (Comment color usually works well for dimming)
+        api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+      end
     end
   end
 end
