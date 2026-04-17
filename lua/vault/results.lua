@@ -215,6 +215,8 @@ function M.edit_cell()
   if not r_ovr_win or not api.nvim_win_is_valid(r_ovr_win) then return end
   if api.nvim_get_current_win() ~= r_ovr_win then return end
 
+  print('working')
+
   local table_name = last_sql and last_sql:match('[Ff][Rr][Oo][Mm]%s+["\']?(%w+)["\']?')
   print(table_name)
   if not table_name then
