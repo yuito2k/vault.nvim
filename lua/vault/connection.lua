@@ -12,13 +12,27 @@ local conn_state = {
     { name = ' Database Path ', value = '/path/to/db.db', type = 'input', row = 12, col = 6, width = 70 },
     { name = 'Browser', value = '...', type = 'button', row = 12, col = 78, width = 3 },
   },
+  -- PostgreSQL extra fields (hidden by default)
+  pg_fields = {
+    { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
+    { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 10 },
+    { name = ' Database ', value = '',          type = 'input', row = 16, col = 6,  width = 75 },
+    { name = ' Username ', value = 'username',  type = 'input', row = 20, col = 6,  width = 35 },
+    { name = ' Password ', value = '',          type = 'input', row = 20, col = 44, width = 35 },
+  },
+  is_pg_mode = false,
+  pg_wins    = {},
   wins = {}, -- Track all 4 field windows here
   main_win = nil,
 }
 
 -- 3. Function to update which one is "Bright"
 function update_focus()
-  for i, win in ipairs(conn_state.wins) do
+  local all_wins = {}
+  for _, w in ipairs(conn_state.wins) do table.insert(all_wins, w) end
+  for _, w in ipairs(conn_state.pg_wins) do table.insert(all_wins, w) end
+
+  for i, win in ipairs(all_wins) do
     if i == conn_state.active_idx then
       -- Active: Bright Border/Text
       api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
@@ -27,6 +41,78 @@ function update_focus()
       -- Inactive: Dimmed (Comment color usually works well for dimming)
       api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
     end
+  end
+end
+
+local function show_pg_fields(main_win, ibuf_list)
+  -- Close existing pg field windows
+  for _, win in ipairs(conn_state.pg_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.pg_wins = {}
+
+  if not conn_state.is_pg_mode then return end
+
+  for i, field in ipairs(conn_state.pg_fields) do
+    local ibuf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+    local win = vim.api.nvim_open_win(ibuf, false, {
+      relative = 'win',
+      win      = main_win,
+      row      = field.row,
+      col      = field.col - 5,
+      width    = field.width,
+      height   = 1,
+      title    = field.name,
+      style    = 'minimal',
+      border   = 'rounded',
+      zindex   = 260,
+    })
+    conn_state.pg_wins[i] = win
+
+    -- hint text styling
+    vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+
+    local bopts = { buffer = ibuf, silent = true }
+
+    vim.keymap.set('n', '<Tab>', function()
+      -- Tab cycles through pg fields
+      conn_state.active_idx = (conn_state.active_idx % 
+        (#conn_state.fields + #conn_state.pg_fields)) + 1
+      
+      update_focus()
+    end, bopts)
+
+    vim.keymap.set('n', '<CR>', function()
+      vim.cmd 'startinsert!'
+    end, bopts)
+
+    vim.keymap.set('n', 's', function()
+      M.trigger_save_connection()
+    end, bopts)
+
+    vim.keymap.set('n', '<Esc>', function()
+      for _, w in ipairs(conn_state.wins) do
+        if vim.api.nvim_win_is_valid(w) then
+          vim.api.nvim_win_close(w, true)
+        end
+      end
+      for _, w in ipairs(conn_state.pg_wins) do
+        if vim.api.nvim_win_is_valid(w) then
+          vim.api.nvim_win_close(w, true)
+        end
+      end
+      vim.api.nvim_win_close(conn_state.main_win, true)
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+          vim.api.nvim_set_current_win(id)
+          return
+        end
+      end
+    end, bopts)
   end
 end
 
@@ -78,6 +164,28 @@ function M.show_dropdown_picker(field, parent_win)
     field.value = line
     api.nvim_buf_set_lines(api.nvim_win_get_buf(parent_win), 0, -1, false, { line })
     api.nvim_win_close(picker_win, true)
+
+    -- Toggle PostgreSQL fields
+    local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
+    if is_pg ~= conn_state.is_pg_mode then
+      conn_state.is_pg_mode = is_pg
+
+      -- Hide/show path field and browser button
+      local path_win    = conn_state.wins[3]
+      local browser_win = conn_state.wins[4]
+      if path_win and vim.api.nvim_win_is_valid(path_win) then
+        vim.api.nvim_win_set_config(path_win, {
+          hide = is_pg  -- hide path field for network DBs
+        })
+      end
+      if browser_win and vim.api.nvim_win_is_valid(browser_win) then
+        vim.api.nvim_win_set_config(browser_win, {
+          hide = is_pg
+        })
+      end
+
+      show_pg_fields(conn_state.main_win, nil)
+    end
   end, { buffer = buf, silent = true })
 
   vim.keymap.set('n', '<Esc>', function()
@@ -99,6 +207,16 @@ function M.trigger_save_connection()
       return ""
   end
 
+  local function get_pg_field_text(index)
+    local win = conn_state.pg_wins[index]
+    if win and vim.api.nvim_win_is_valid(win) then
+      local buf   = vim.api.nvim_win_get_buf(win)
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      return lines[1] or ''
+    end
+    return ''
+  end
+
   -- 2. Extract values based on your UI layout indices
   -- Replace [1], [2], etc. with the actual indices of your fields
   local typed_name = get_field_text(1)
@@ -117,6 +235,55 @@ function M.trigger_save_connection()
 
   if f then
     f:close()
+
+    if conn_state.is_pg_mode then
+    -- PostgreSQL / MySQL connection string
+    local server   = get_pg_field_text(1)
+    local port     = get_pg_field_text(2)
+    local database = get_pg_field_text(3)
+    local username = get_pg_field_text(4)
+    local password = get_pg_field_text(5)
+
+    -- Build connection string as the "path"
+    local conn_str = string.format(
+      '%s://%s:%s@%s:%s/%s',
+      selected_type:lower(),
+      username, password, server, port, database
+    )
+
+    -- Save to db
+    local path = state.db_path_internal
+    local db   = require('sqlite.db'):open(path)
+    local db_id = generate_id()
+    local insert_query = string.format(
+      [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
+      db_id:gsub("'","''"),
+      typed_name:gsub("'","''"),
+      selected_type:gsub("'","''"),
+      conn_str:gsub("'","''")
+    )
+    local success, err = pcall(function() db:eval(insert_query) end)
+    if success then
+      -- refresh overlay list same as SQLite save
+      -- ... same overlay refresh code ...
+      for _, w in ipairs(conn_state.wins) do
+        if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
+      end
+      for _, w in ipairs(conn_state.pg_wins) do
+        if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
+      end
+      vim.api.nvim_win_close(conn_state.main_win, true)
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+          vim.api.nvim_set_current_win(id)
+          return
+        end
+      end
+    else
+      print('Database Error: ' .. tostring(err))
+    end
+    db:close()
+  else
     local db = require('sqlite.db'):open(path)
     local db_id = M.generate_id()
 
