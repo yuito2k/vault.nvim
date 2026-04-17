@@ -17,7 +17,7 @@ local conn_state = {
     { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
     { name = ' Database Type ', value = 'PostgreSQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
     { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
-    { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 58, width = 22 },
+    { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 22 },
     { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
     { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
     { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 37 },
