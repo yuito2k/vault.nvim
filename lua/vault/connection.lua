@@ -157,7 +157,7 @@ local function show_sql_fields(main_win, ibuf_list)
 
     local win = api.nvim_open_win(ibuf, false, { -- open as false (don't focus yet)
       relative = 'win',
-      win = conn_state.main_win,
+      win = main_win,
       row = field.row,
       col = field.col - 5,
       width = field.width,
