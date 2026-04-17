@@ -317,7 +317,7 @@ local function show_edit_pg_fields(main_win)
   end
   edit_state.pg_wins = {}
 
-  --if not edit_state.is_pg_mode then return end
+  if not edit_state.is_pg_mode then return end
 
   for i, field in ipairs(edit_state.pg_fields) do
     local ibuf = vim.api.nvim_create_buf(false, true)
