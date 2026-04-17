@@ -99,7 +99,12 @@ local function show_pg_fields(main_win, ibuf_list)
     end, bopts)
 
     vim.keymap.set('n', '<CR>', function()
-      vim.cmd 'startinsert!'
+      if field.type == 'dropdown' then
+        -- Trigger the new picker function
+        M.show_dropdown_picker(field, conn_state.wins[i])
+      else
+        vim.cmd 'startinsert!'
+      end
     end, bopts)
 
     vim.keymap.set('n', 's', function()
