@@ -331,6 +331,8 @@ function M.show_dropdown_picker(field, parent_win)
 
       show_pg_fields(conn_state.main_win, nil)
     elseif line == 'SQLite' then
+      conn_state.is_pg_mode = false
+
       for i, win in ipairs(conn_state.pg_wins) do
         api.nvim_win_close(win, true)
       end
