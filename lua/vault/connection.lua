@@ -53,6 +53,18 @@ function update_focus()
         api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
       end
     end
+  if conn_state.is_mysql_mode then
+
+    for i, win in ipairs(conn_state.mysql_wins) do
+      if i == conn_state.active_idx then
+        -- Active: Bright Border/Text
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_set_current_win(win)
+      else
+        -- Inactive: Dimmed (Comment color usually works well for dimming)
+        api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
+      end
+    end
   else
     for i, win in ipairs(conn_state.wins) do
       if i == conn_state.active_idx then
@@ -218,7 +230,6 @@ local function show_mysql_fields(main_win, ibuf_list)
 
     vim.keymap.set('n', '<Tab>', function()
       -- Tab cycles through pg fields
-      print(1)
       conn_state.active_idx = (conn_state.active_idx % 
         (#conn_state.mysql_fields)) + 1
       
