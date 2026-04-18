@@ -42,7 +42,6 @@ local conn_state = {
 -- 3. Function to update which one is "Bright"
 function update_focus()
   if conn_state.is_pg_mode then
-
     for i, win in ipairs(conn_state.pg_wins) do
       if i == conn_state.active_idx then
         -- Active: Bright Border/Text
@@ -53,8 +52,7 @@ function update_focus()
         api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
       end
     end
-  if conn_state.is_mysql_mode then
-
+  elseif conn_state.is_mysql_mode then
     for i, win in ipairs(conn_state.mysql_wins) do
       if i == conn_state.active_idx then
         -- Active: Bright Border/Text
