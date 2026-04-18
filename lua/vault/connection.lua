@@ -188,7 +188,7 @@ local function show_mysql_fields(main_win, ibuf_list)
     local ibuf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = vim.api.nvim_open_win(ibuf, true, {
+    local win = vim.api.nvim_open_win(ibuf, false, {
       relative = 'win',
       win      = main_win,
       row      = field.row,
@@ -286,7 +286,7 @@ local function show_sql_fields(main_win, ibuf_list)
     local ibuf = api.nvim_create_buf(false, true)
     api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = api.nvim_open_win(ibuf, true, { -- open as false (don't focus yet)
+    local win = api.nvim_open_win(ibuf, false, { -- open as false (don't focus yet)
       relative = 'win',
       win = main_win,
       row = field.row,
