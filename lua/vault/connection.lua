@@ -246,6 +246,8 @@ local function show_mysql_fields(main_win, ibuf_list)
       end
       vim.api.nvim_win_close(conn_state.main_win, true)
 
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
       conn_state.is_mysql_mode = false
       conn_state.mysql_wins    = {}
       conn_state.wins = {}
