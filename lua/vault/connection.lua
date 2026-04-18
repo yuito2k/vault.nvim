@@ -22,8 +22,19 @@ local conn_state = {
     { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
     { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 37 },
   },
+  mysql_fields = {
+    { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
+    { name = ' Database Type ', value = 'MySQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+    { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
+    { name = ' Port ',     value = '3306',      type = 'input', row = 12, col = 59, width = 22 },
+    { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
+    { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
+    { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 37 },
+  },
   is_pg_mode = false,
   pg_wins    = {},
+  is_mysql_mode = false,
+  mysql_wins    = {},
   wins = {}, -- Track all 4 field windows here
   main_win = nil,
 }
@@ -133,6 +144,110 @@ local function show_pg_fields(main_win, ibuf_list)
 
       conn_state.is_pg_mode = false
       conn_state.pg_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
+
+      for id, name in pairs(state.wins) do
+        if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+          vim.api.nvim_set_current_win(id)
+          return
+        end
+      end
+    end, bopts)
+  end
+
+  update_focus()
+end
+
+local function show_mysql_fields(main_win, ibuf_list)
+  -- Close existing pg field windows
+  for _, win in ipairs(conn_state.pg_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.pg_wins = {}
+
+  for _, win in ipairs(conn_state.mysql_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.mysql_wins = {}
+
+  for _, win in ipairs(conn_state.wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.wins = {}
+
+  if not conn_state.is_mysql_mode then return end
+
+  for i, field in ipairs(conn_state.mysql_fields) do
+    local ibuf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+    local win = vim.api.nvim_open_win(ibuf, true, {
+      relative = 'win',
+      win      = main_win,
+      row      = field.row,
+      col      = field.col - 5,
+      width    = field.width,
+      height   = 1,
+      title    = field.name,
+      style    = 'minimal',
+      border   = 'rounded',
+      zindex   = 260,
+    })
+    conn_state.mysql_wins[i] = win
+
+    -- hint text styling
+    vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+
+    local bopts = { buffer = ibuf, silent = true }
+
+    vim.keymap.set('n', '<Tab>', function()
+      -- Tab cycles through pg fields
+      conn_state.active_idx = (conn_state.active_idx % 
+        (#conn_state.mysql_fields)) + 1
+      
+      update_focus()
+    end, bopts)
+
+    vim.keymap.set('n', '<CR>', function()
+      if field.type == 'dropdown' then
+        -- Trigger the new picker function
+        M.show_dropdown_picker(field, conn_state.mysql_wins[i])
+      else
+        vim.cmd 'startinsert!'
+      end
+    end, bopts)
+
+    vim.keymap.set('n', 's', function()
+      M.trigger_save_connection()
+    end, bopts)
+
+    vim.keymap.set('n', '<Esc>', function()
+      for _, w in ipairs(conn_state.wins) do
+        if vim.api.nvim_win_is_valid(w) then
+          vim.api.nvim_win_close(w, true)
+        end
+      end
+      for _, w in ipairs(conn_state.pg_wins) do
+        if vim.api.nvim_win_is_valid(w) then
+          vim.api.nvim_win_close(w, true)
+        end
+      end
+      for _, w in ipairs(conn_state.mysql_wins) do
+        if vim.api.nvim_win_is_valid(w) then
+          vim.api.nvim_win_close(w, true)
+        end
+      end
+      vim.api.nvim_win_close(conn_state.main_win, true)
+
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
       conn_state.wins = {}
       conn_state.main_win = nil
 
@@ -336,8 +451,7 @@ function M.show_dropdown_picker(field, parent_win)
     -- Toggle PostgreSQL fields
     --local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
     --if is_pg ~= conn_state.is_pg_mode then
-    if line == 'PostgreSQL' or line == 'MySQL' then
-      field.value = line
+    if line == 'PostgreSQL' then
       conn_state.is_pg_mode = true
 
       for i, win in ipairs(conn_state.wins) do
@@ -345,8 +459,15 @@ function M.show_dropdown_picker(field, parent_win)
       end
 
       show_pg_fields(conn_state.main_win, nil)
+    elseif line == 'MySQL' then
+      conn_state.is_mysql_mode = true
+
+      for i, win in ipairs(conn_state.wins) do
+        api.nvim_win_close(win, true)
+      end
+
+      show_mysql_fields(conn_state.main_win, nil)
     elseif line == 'SQLite' then
-      field.value = line
       conn_state.is_pg_mode = false
 
       for i, win in ipairs(conn_state.pg_wins) do
