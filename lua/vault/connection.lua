@@ -27,8 +27,8 @@ local conn_state = {
     { name = ' Database Type ', value = 'MySQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
     { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
     { name = ' Port ',     value = '3306',      type = 'input', row = 12, col = 59, width = 22 },
-    { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
-    { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
+    { name = ' Database ', value = 'mysql',          type = 'input', row = 16, col = 6,  width = 75 },
+    { name = ' Username ', value = 'mysql',  type = 'input', row = 20, col = 6,  width = 35 },
     { name = ' Password ', value = 'secret',          type = 'input', row = 20, col = 44, width = 37 },
   },
   is_pg_mode = false,
@@ -75,6 +75,13 @@ local function show_pg_fields(main_win, ibuf_list)
     end
   end
   conn_state.pg_wins = {}
+
+  for _, win in ipairs(conn_state.mysql_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.mysql_wins = {}
 
   for _, win in ipairs(conn_state.wins) do
     if vim.api.nvim_win_is_valid(win) then
@@ -144,6 +151,8 @@ local function show_pg_fields(main_win, ibuf_list)
 
       conn_state.is_pg_mode = false
       conn_state.pg_wins    = {}
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
       conn_state.wins = {}
       conn_state.main_win = nil
 
@@ -188,7 +197,7 @@ local function show_mysql_fields(main_win, ibuf_list)
     local ibuf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = vim.api.nvim_open_win(ibuf, false, {
+    local win = vim.api.nvim_open_win(ibuf, true, {
       relative = 'win',
       win      = main_win,
       row      = field.row,
@@ -281,12 +290,19 @@ local function show_sql_fields(main_win, ibuf_list)
   end
   conn_state.pg_wins = {}
 
+  for _, win in ipairs(conn_state.mysql_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.mysql_wins = {}
+
   -- 2. Create ALL field windows immediately
   for i, field in ipairs(conn_state.fields) do
     local ibuf = api.nvim_create_buf(false, true)
     api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = api.nvim_open_win(ibuf, false, { -- open as false (don't focus yet)
+    local win = api.nvim_open_win(ibuf, true, { -- open as false (don't focus yet)
       relative = 'win',
       win = main_win,
       row = field.row,
@@ -385,6 +401,8 @@ local function show_sql_fields(main_win, ibuf_list)
 
       conn_state.is_pg_mode = false
       conn_state.pg_wins    = {}
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
       conn_state.wins = {}
       conn_state.main_win = nil
 
