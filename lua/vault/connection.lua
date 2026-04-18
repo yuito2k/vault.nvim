@@ -218,6 +218,7 @@ local function show_mysql_fields(main_win, ibuf_list)
 
     vim.keymap.set('n', '<Tab>', function()
       -- Tab cycles through pg fields
+      print(1)
       conn_state.active_idx = (conn_state.active_idx % 
         (#conn_state.mysql_fields)) + 1
       
