@@ -483,6 +483,7 @@ function M.show_dropdown_picker(field, parent_win)
     --if is_pg ~= conn_state.is_pg_mode then
     if line == 'PostgreSQL' then
       conn_state.is_pg_mode = true
+      conn_state.is_mysql_mode = false
 
       for i, win in ipairs(conn_state.wins) do
         api.nvim_win_close(win, true)
@@ -490,6 +491,7 @@ function M.show_dropdown_picker(field, parent_win)
 
       show_pg_fields(conn_state.main_win, nil)
     elseif line == 'MySQL' then
+      conn_state.is_pg_mode = false
       conn_state.is_mysql_mode = true
 
       for i, win in ipairs(conn_state.wins) do
@@ -499,6 +501,7 @@ function M.show_dropdown_picker(field, parent_win)
       show_mysql_fields(conn_state.main_win, nil)
     elseif line == 'SQLite' then
       conn_state.is_pg_mode = false
+      conn_state.is_mysql_mode = false
 
       for i, win in ipairs(conn_state.pg_wins) do
         api.nvim_win_close(win, true)
