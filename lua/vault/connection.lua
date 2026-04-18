@@ -329,7 +329,7 @@ function M.show_dropdown_picker(field, parent_win)
 
   vim.keymap.set('n', '<CR>', function()
     local line = api.nvim_get_current_line()
-    field.value = line
+    --field.value = line
     api.nvim_buf_set_lines(api.nvim_win_get_buf(parent_win), 0, -1, false, { line })
     api.nvim_win_close(picker_win, true)
 
@@ -337,7 +337,7 @@ function M.show_dropdown_picker(field, parent_win)
     --local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
     --if is_pg ~= conn_state.is_pg_mode then
     if line == 'PostgreSQL' or line == 'MySQL' then
-      field.value = line
+      --field.value = line
       conn_state.is_pg_mode = true
 
       for i, win in ipairs(conn_state.wins) do
@@ -346,7 +346,7 @@ function M.show_dropdown_picker(field, parent_win)
 
       show_pg_fields(conn_state.main_win, nil)
     elseif line == 'SQLite' then
-      field.value = line
+      --field.value = line
       conn_state.is_pg_mode = false
 
       for i, win in ipairs(conn_state.pg_wins) do
