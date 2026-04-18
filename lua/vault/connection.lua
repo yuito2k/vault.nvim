@@ -65,6 +65,13 @@ local function show_pg_fields(main_win, ibuf_list)
   end
   conn_state.pg_wins = {}
 
+  for _, win in ipairs(conn_state.wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.wins = {}
+
   if not conn_state.is_pg_mode then return end
 
   for i, field in ipairs(conn_state.pg_fields) do
@@ -143,12 +150,19 @@ end
 
 local function show_sql_fields(main_win, ibuf_list)
   -- 1. Clear any old windows if re-opening
-  for _, win in pairs(conn_state.pg_wins) do
+  for _, win in pairs(conn_state.wins) do
     if api.nvim_win_is_valid(win) then
       api.nvim_win_close(win, true)
     end
   end
   conn_state.wins = {}
+
+  for _, win in ipairs(conn_state.pg_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  conn_state.pg_wins = {}
 
   -- 2. Create ALL field windows immediately
   for i, field in ipairs(conn_state.fields) do
@@ -320,7 +334,7 @@ function M.show_dropdown_picker(field, parent_win)
     api.nvim_win_close(picker_win, true)
 
     -- Toggle PostgreSQL fields
-    local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
+    --local is_pg = (line == 'PostgreSQL' or line == 'MySQL')
     --if is_pg ~= conn_state.is_pg_mode then
     if line == 'PostgreSQL' or line == 'MySQL' then
       conn_state.is_pg_mode = true
@@ -391,11 +405,13 @@ function M.trigger_save_connection()
 
     if conn_state.is_pg_mode then
       -- PostgreSQL / MySQL connection string
-      local server   = get_pg_field_text(1)
-      local port     = get_pg_field_text(2)
-      local database = get_pg_field_text(3)
-      local username = get_pg_field_text(4)
-      local password = get_pg_field_text(5)
+      local db_name = get_pg_field_text(1)
+      local db_type = get_pg_field_text(2)
+      local server   = get_pg_field_text(3)
+      local port     = get_pg_field_text(4)
+      local database = get_pg_field_text(5)
+      local username = get_pg_field_text(6)
+      local password = get_pg_field_text(7)
 
       -- Build connection string as the "path"
       local conn_str = string.format(
@@ -790,7 +806,7 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
           local result = db:eval('SELECT * FROM database')
           if type(result) == 'table' then
             for i, row in ipairs(result) do
-              local line_content = ' ■ ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+              local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
               if i == 1 then
                 vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
               else
