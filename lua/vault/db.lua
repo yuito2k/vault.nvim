@@ -20,7 +20,7 @@ function M.init()
       path TEXT NOT NULL,
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
-      db_name TEXT NOT NULL,
+      database TEXT NOT NULL,
       username TEXT NOT NULL,
       password TEXT NOT NULL
     );

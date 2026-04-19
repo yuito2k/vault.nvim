@@ -569,6 +569,9 @@ function M.trigger_save_connection()
       local username = get_pg_field_text(6)
       local password = get_pg_field_text(7)
 
+      print(db_name, db_type, server, port, database, username, password)
+      return
+
       -- Build connection string as the "path"
       local conn_str = string.format(
         '%s://%s:%s@%s:%s/%s',
