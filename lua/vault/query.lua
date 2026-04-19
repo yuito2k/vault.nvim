@@ -427,11 +427,11 @@ function M.execute_pg_query()
   local pgmoon = require('pgmoon')
 
   local db = pgmoon.new({
-    host     = db_host,
-    port     = db_port or '5432',
-    database = database,
-    user     = db_user,
-    password = db_password,
+    host     = state.db_host,
+    port     = state.db_port or '5432',
+    database = state.db_database,
+    user     = state.db_user,
+    password = state.db_password,
   })
 
   assert(db:connect())
