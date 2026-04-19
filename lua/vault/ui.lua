@@ -801,7 +801,7 @@ M.open_db_float = function()
       end
       if name == 'q_overlay' then
         -- Execute query on Enter in Normal mode
-        vim.keymap.set('n', '<CR>', query.execute_query, { buffer = b, desc = 'Execute SQL Query' })
+        vim.keymap.set('n', '<CR>', query.execute_statement, { buffer = b, desc = 'Execute SQL Query' })
       end
 
       -- Cycle through multiple result sets with Tab

@@ -194,6 +194,14 @@ function M.suggest_confirm(q_ovr_win)
   return true
 end
 
+function M.execute_statement()
+  if state.db_type == "SQLite" then
+    M.execute_query()
+  elseif state.db_type == "PostgreSQL" then
+    M.execute_pg_query()
+  end
+end
+
 function M.execute_query()
   local q_ovr_win = nil
   local r_ovr_buf = nil
@@ -425,7 +433,7 @@ function M.execute_pg_query()
     user     = db_user,
     password = db_password,
   })
-  
+
   assert(db:connect())
 
   if not state.is_connected then
