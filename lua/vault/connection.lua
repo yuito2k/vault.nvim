@@ -580,8 +580,32 @@ function M.trigger_save_connection()
       )
       local success, err = pcall(function() db:eval(insert_query) end)
       if success then
-        -- refresh overlay list same as SQLite save
-        -- ... same overlay refresh code ...
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' then
+              local ovr_buf = vim.api.nvim_win_get_buf(id)
+              api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+              api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+
+              --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
+              local line_content = '  ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
+
+              -- 1. Get the content of the very first line (index 0 to 1)
+              local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
+
+              -- 2. Check if the buffer is empty (line count is 1 and the line is empty)
+              if vim.api.nvim_buf_line_count(ovr_buf) == 1 and first_line == "" then
+                  -- Replace the empty first line
+                  vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+              else
+                  -- Append a new line at the very end
+                  vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+              end
+
+              api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+              break
+          end
+        end
+        
         for _, w in ipairs(conn_state.wins) do
           if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
         end
