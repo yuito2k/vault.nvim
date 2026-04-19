@@ -91,7 +91,7 @@ function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, d
 
   -- 2. Fetch all objects (Tables, Views, Triggers, Indexes)
   --    PostgreSQL uses information_schema and pg_catalog instead of sqlite_schema
-  local ok, schema = db:query([[
+  local schema, err = db:query([[
     SELECT table_name AS name, table_type AS type
     FROM information_schema.tables
     WHERE table_schema = 'public'
@@ -109,8 +109,8 @@ function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, d
     WHERE trigger_schema = 'public'
   ]])
 
-  if not ok then
-    error('Failed to fetch schema: ' .. tostring(schema))
+  if not schema then
+    error('Failed to fetch schema: ' .. tostring(err))
   end
 
   for _, obj in ipairs(schema) do
@@ -132,7 +132,7 @@ function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, d
 
       -- 3. If it's a table, fetch its columns via information_schema
       if normalized_type == 'table' then
-        local ok2, cols = db:query(string.format([[
+        local cols, col_err = db:query(string.format([[
           SELECT column_name AS name, data_type AS type
           FROM information_schema.columns
           WHERE table_schema = 'public'
@@ -140,8 +140,8 @@ function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, d
           ORDER BY ordinal_position
         ]], obj.name))
 
-        if not ok2 then
-          error('Failed to fetch columns for ' .. obj.name .. ': ' .. tostring(cols))
+        if not cols then
+          error('Failed to fetch columns for ' .. obj.name .. ': ' .. tostring(col_err))
         end
 
         local field_children = {}
