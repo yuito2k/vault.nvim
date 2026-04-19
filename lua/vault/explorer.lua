@@ -63,6 +63,114 @@ function M.fetch_dynamic_data(db_path, db_name, db_type, db_id)
   return state.db_data
 end
 
+function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, db_user, db_password, db_id)
+  local pgmoon = require('pgmoon')
+  local db = pgmoon.new({
+    host     = db_host,
+    port     = db_port or '5432',
+    database = database,
+    user     = db_user,
+    password = db_password,
+  })
+
+  assert(db:connect())
+
+  -- 1. Initialize the root structure
+  state.db_data = {
+    [db_name] = {
+      id       = db_id or '',
+      name     = db_name .. ' ' .. '[' .. db_type .. ']',
+      type     = 'db',
+      children = { 'Tables', 'Views', 'Indexes', 'Triggers' },
+    },
+    ['Tables']   = { name = 'Tables',   type = 'folder', children = {} },
+    ['Views']    = { name = 'Views',    type = 'folder', children = {} },
+    ['Indexes']  = { name = 'Indexes',  type = 'folder', children = {} },
+    ['Triggers'] = { name = 'Triggers', type = 'folder', children = {} },
+  }
+
+  -- 2. Fetch all objects (Tables, Views, Triggers, Indexes)
+  --    PostgreSQL uses information_schema and pg_catalog instead of sqlite_schema
+  local ok, schema = db:query([[
+    SELECT table_name AS name, table_type AS type
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+
+    UNION ALL
+
+    SELECT indexname AS name, 'index' AS type
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+
+    UNION ALL
+
+    SELECT trigger_name AS name, 'trigger' AS type
+    FROM information_schema.triggers
+    WHERE trigger_schema = 'public'
+  ]])
+
+  if not ok then
+    error('Failed to fetch schema: ' .. tostring(schema))
+  end
+
+  for _, obj in ipairs(schema) do
+    -- Normalize PG types to match your folder keys
+    -- information_schema returns 'BASE TABLE' and 'VIEW', so map them
+    local normalized_type
+    if obj.type == 'BASE TABLE' then
+      normalized_type = 'table'
+    elseif obj.type == 'VIEW' then
+      normalized_type = 'view'
+    else
+      normalized_type = obj.type:lower() -- 'index', 'trigger'
+    end
+
+    local folder_key = normalized_type:gsub('^%l', string.upper) .. 's' -- e.g., 'table' -> 'Tables'
+
+    if state.db_data[folder_key] then
+      table.insert(state.db_data[folder_key].children, obj.name)
+
+      -- 3. If it's a table, fetch its columns via information_schema
+      if normalized_type == 'table' then
+        local ok2, cols = db:query(string.format([[
+          SELECT column_name AS name, data_type AS type
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = '%s'
+          ORDER BY ordinal_position
+        ]], obj.name))
+
+        if not ok2 then
+          error('Failed to fetch columns for ' .. obj.name .. ': ' .. tostring(cols))
+        end
+
+        local field_children = {}
+        for _, col in ipairs(cols) do
+          local field_name = obj.name .. '.' .. col.name
+          local display    = col.name .. ' ' .. col.type
+          state.db_data[field_name] = { name = display, type = 'field' }
+          table.insert(field_children, field_name)
+        end
+
+        state.db_data[obj.name] = {
+          name     = obj.name,
+          type     = 'table',
+          children = field_children,
+        }
+
+        if state.open_nodes[obj.name] == nil then
+          state.open_nodes[obj.name] = false
+        end
+      else
+        state.db_data[obj.name] = { name = obj.name, type = normalized_type, children = {} }
+      end
+    end
+  end
+
+  db:disconnect()
+  return state.db_data
+end
+
 function M.render_explorer_tree(buf)
   local lines = {}
   local highlights = {}  -- { line_idx (0-based), col_start, col_end, hl_group }
@@ -382,7 +490,10 @@ function M.toggle_node()
     if state.is_connected == false then
       if db_type == word then
         local connection = require('vault.connection')
-        connection.connect_db(buf, node_id)
+        if db_type == "SQLite" then
+          connection.connect_sql_db(buf, node_id)
+        elseif db_type == "PostgreSQL" then
+          connection.connect_pg_db(buf, node_id)
         return
       end
     elseif state.is_connected == true then
