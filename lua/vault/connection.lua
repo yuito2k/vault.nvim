@@ -567,7 +567,7 @@ function M.trigger_save_connection()
       local db   = require('sqlite.db'):open(path)
       local db_id = M.generate_id()
       local insert_query = string.format(
-        [[INSERT INTO database (id, name, type, path, host, port, database, username, password) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',);]],
+        [[INSERT INTO database (id, name, type, path, host, port, database, username, password) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');]],
         db_id:gsub("'","''"),
         db_name:gsub("'","''"),
         db_type:gsub("'","''"),
