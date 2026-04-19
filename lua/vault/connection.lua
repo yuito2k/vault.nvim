@@ -605,11 +605,14 @@ function M.trigger_save_connection()
               break
           end
         end
-        
+
         for _, w in ipairs(conn_state.wins) do
           if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
         end
         for _, w in ipairs(conn_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
+        end
+        for _, w in ipairs(conn_state.mysql_wins) do
           if vim.api.nvim_win_is_valid(w) then vim.api.nvim_win_close(w, true) end
         end
         vim.api.nvim_win_close(conn_state.main_win, true)
