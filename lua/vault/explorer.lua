@@ -494,6 +494,7 @@ function M.toggle_node()
           connection.connect_sql_db(buf, node_id)
         elseif db_type == "PostgreSQL" then
           connection.connect_pg_db(buf, node_id)
+        end
         return
       end
     elseif state.is_connected == true then
