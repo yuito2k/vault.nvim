@@ -437,7 +437,10 @@ function M.refresh_explorer_tree()
   end
 
   -- Re-fetch fresh schema
-  state.db_data = M.fetch_dynamic_data(db_path, db_name, db_type, db_id)
+  if state.db_type == "SQLite" then
+    state.db_data = M.fetch_dynamic_data(db_path, db_name, db_type, db_id)
+  elseif state.db_type == "PostgreSQL" then
+    state.db_data = M.fetch_dynamic_pg_data(db_name, db_type, state.db_host, state.db_port, state.db_database, state.db_username, state.db_password, db_id)
 
   -- Restore open_nodes — keep existing states, init new nodes as closed
   state.open_nodes = {}

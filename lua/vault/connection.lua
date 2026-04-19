@@ -1243,6 +1243,11 @@ function M.connect_pg_db(ovr_buf, db_id)
   state.db_id = db_id  -- add this alongside state.db_path, state.db_type etc.
   state.db_path = db_path
   state.db_type = db_type
+  state.db_host = db_host
+  state.db_port = db_port
+  state.db_database = db_database
+  state.db_username = db_username
+  state.db_password = db_password
   state.is_connected = true
 
   -- Set default open states
@@ -1407,6 +1412,11 @@ M.disconnect_db = function()
   state.db_data = {} -- Clear the temporary schema data
   state.db_path = nil
   state.db_type = nil
+  state.db_host = nil
+  state.db_port = nil
+  state.db_database = nil
+  state.db_username = nil
+  state.db_password = nil
   state.db_id = nil
   state.last_select_sql = nil
     
