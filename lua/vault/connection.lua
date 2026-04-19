@@ -144,6 +144,12 @@ local function show_pg_fields(main_win, ibuf_list)
 
     vim.keymap.set('n', 's', function()
       M.trigger_save_connection()
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
     end, bopts)
 
     vim.keymap.set('n', '<Esc>', function()
@@ -245,6 +251,12 @@ local function show_mysql_fields(main_win, ibuf_list)
 
     vim.keymap.set('n', 's', function()
       M.trigger_save_connection()
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
     end, bopts)
 
     vim.keymap.set('n', '<Esc>', function()
@@ -336,6 +348,12 @@ local function show_sql_fields(main_win, ibuf_list)
     local opts = { buffer = ibuf, silent = true }
     vim.keymap.set('n', 's', function()
       M.trigger_save_connection()
+      conn_state.is_pg_mode = false
+      conn_state.pg_wins    = {}
+      conn_state.is_mysql_mode = false
+      conn_state.mysql_wins    = {}
+      conn_state.wins = {}
+      conn_state.main_win = nil
     end, opts)
 
     -- ENTER to edit (simplified)
