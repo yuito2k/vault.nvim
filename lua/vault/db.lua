@@ -15,14 +15,14 @@ function M.init()
   db:eval([[
     CREATE TABLE IF NOT EXISTS database (
       id   TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      path TEXT NOT NULL,
-      host TEXT NOT NULL,
-      port INTEGER NOT NULL,
-      database TEXT NOT NULL,
-      username TEXT NOT NULL,
-      password TEXT NOT NULL
+      name TEXT,
+      type TEXT,
+      path TEXT,
+      host TEXT,
+      port INTEGER,
+      database TEXT,
+      username TEXT,
+      password TEXT
     );
 
     CREATE TABLE IF NOT EXISTS query_history (

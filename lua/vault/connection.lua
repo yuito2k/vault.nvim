@@ -16,7 +16,7 @@ local conn_state = {
   pg_fields = {
     { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
     { name = ' Database Type ', value = 'PostgreSQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
-    { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
+    { name = ' Server/Host ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
     { name = ' Port ',     value = '5432',      type = 'input', row = 12, col = 59, width = 22 },
     { name = ' Database ', value = 'postgres',          type = 'input', row = 16, col = 6,  width = 75 },
     { name = ' Username ', value = 'postgres',  type = 'input', row = 20, col = 6,  width = 35 },
@@ -25,7 +25,7 @@ local conn_state = {
   mysql_fields = {
     { name = ' Database Name ', value = 'MyDatabase', type = 'input', row = 4, col = 6, width = 75 },
     { name = ' Database Type ', value = 'MySQL', type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
-    { name = ' Server ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
+    { name = ' Server/Host ',   value = 'localhost', type = 'input', row = 12, col = 6,  width = 50 },
     { name = ' Port ',     value = '3306',      type = 'input', row = 12, col = 59, width = 22 },
     { name = ' Database ', value = 'mysql',          type = 'input', row = 16, col = 6,  width = 75 },
     { name = ' Username ', value = 'mysql',  type = 'input', row = 20, col = 6,  width = 35 },
@@ -554,15 +554,11 @@ function M.trigger_save_connection()
 
     if conn_state.is_pg_mode then
       -- PostgreSQL / MySQL connection string
-      local db_name = get_pg_field_text(1)
-      local db_type = get_pg_field_text(2)
       local server   = get_pg_field_text(3)
       local port     = get_pg_field_text(4)
       local database = get_pg_field_text(5)
       local username = get_pg_field_text(6)
       local password = get_pg_field_text(7)
-
-      print(db_name, db_type, server, port, database, username, password)
 
       -- Build connection string as the "path"
       local conn_str = string.format(
@@ -572,15 +568,19 @@ function M.trigger_save_connection()
       )
 
       -- Save to db
-      local path = state.db_path_internal
       local db   = require('sqlite.db'):open(path)
-      local db_id = generate_id()
+      local db_id = M.generate_id()
       local insert_query = string.format(
-        [[INSERT INTO database (id, name, type, path) VALUES ('%s', '%s', '%s', '%s');]],
+        [[INSERT INTO database (id, name, type, path, host, port, database, username, password) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',);]],
         db_id:gsub("'","''"),
         typed_name:gsub("'","''"),
         selected_type:gsub("'","''"),
-        conn_str:gsub("'","''")
+        conn_str:gsub("'","''"),
+        server:gsub("'","''"),
+        port:gsub("'","''"),
+        database:gsub("'","''"),
+        username:gsub("'","''"),
+        password:gsub("'","''")
       )
       local success, err = pcall(function() db:eval(insert_query) end)
       if success then
@@ -610,7 +610,7 @@ function M.trigger_save_connection()
           print("Invalid Path: File does not exist!")
           return
       end
-      
+
       local db = require('sqlite.db'):open(path)
       local db_id = M.generate_id()
 
