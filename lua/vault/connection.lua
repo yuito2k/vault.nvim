@@ -587,7 +587,7 @@ function M.trigger_save_connection()
               api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
 
               --api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { '' .. ' ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id })
-              local line_content = '  ' .. typed_name .. ' [' .. selected_type .. '] ' .. '--ID:' .. db_id
+              local line_content = '  ' .. db_name .. ' [' .. db_type .. '] ' .. '--ID:' .. db_id
 
               -- 1. Get the content of the very first line (index 0 to 1)
               local first_line = vim.api.nvim_buf_get_lines(ovr_buf, 0, 1, false)[1]
