@@ -430,7 +430,7 @@ function M.execute_pg_query()
     host     = state.db_host,
     port     = state.db_port or '5432',
     database = state.db_database,
-    user     = state.db_user,
+    user     = state.db_username,
     password = state.db_password,
   })
 
