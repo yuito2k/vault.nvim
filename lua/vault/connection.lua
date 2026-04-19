@@ -1221,6 +1221,7 @@ function M.connect_sql_db(ovr_buf, db_id)
 end
 
 function M.connect_pg_db(ovr_buf, db_id)
+  local path = state.sys_db
   local db = require('sqlite.db'):open(path)
 
   local query = string.format(
