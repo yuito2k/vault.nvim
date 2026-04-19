@@ -540,12 +540,6 @@ function M.trigger_save_connection()
     return ''
   end
 
-  -- 2. Extract values based on your UI layout indices
-  -- Replace [1], [2], etc. with the actual indices of your fields
-  local typed_name = get_field_text(1)
-  local selected_type = get_field_text(2)
-  local typed_path = get_field_text(3)
-
   local path = state.sys_db
   local f = io.open(path, 'r')
 
@@ -554,6 +548,8 @@ function M.trigger_save_connection()
 
     if conn_state.is_pg_mode then
       -- PostgreSQL / MySQL connection string
+      local db_name  = get_pg_field_text(1)
+      local db_type  = get_pg_field_text(2)
       local server   = get_pg_field_text(3)
       local port     = get_pg_field_text(4)
       local database = get_pg_field_text(5)
@@ -563,7 +559,7 @@ function M.trigger_save_connection()
       -- Build connection string as the "path"
       local conn_str = string.format(
         '%s://%s:%s@%s:%s/%s',
-        selected_type:lower(),
+        db_type:lower(),
         username, password, server, port, database
       )
 
@@ -573,8 +569,8 @@ function M.trigger_save_connection()
       local insert_query = string.format(
         [[INSERT INTO database (id, name, type, path, host, port, database, username, password) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s',);]],
         db_id:gsub("'","''"),
-        typed_name:gsub("'","''"),
-        selected_type:gsub("'","''"),
+        db_name:gsub("'","''"),
+        db_type:gsub("'","''"),
         conn_str:gsub("'","''"),
         server:gsub("'","''"),
         port:gsub("'","''"),
@@ -604,6 +600,12 @@ function M.trigger_save_connection()
       end
       db:close()
     else
+      -- 2. Extract values based on your UI layout indices
+      -- Replace [1], [2], etc. with the actual indices of your fields
+      local typed_name = get_field_text(1)
+      local selected_type = get_field_text(2)
+      local typed_path = get_field_text(3)
+
       -- 3. Validation: Check if the file exists at the typed path
       local file_exists = vim.loop.fs_stat(typed_path)
       if not file_exists then
