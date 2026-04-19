@@ -1168,7 +1168,7 @@ end
 
 -- Add a function you can call externally when a connection is made
 -- M.connect_db = function ()
-function M.connect_db(ovr_buf, db_id)
+function M.connect_sql_db(ovr_buf, db_id)
   local path = state.sys_db
   local f = io.open(path, 'r')
 
@@ -1218,6 +1218,57 @@ function M.connect_db(ovr_buf, db_id)
     explorer.render_explorer_tree(ovr_buf)
     db:close()
   end
+end
+
+function M.connect_pg_db(ovr_buf, db_id)
+  local db = require('sqlite.db'):open(path)
+
+  local query = string.format(
+    [[SELECT * FROM database WHERE id = '%s';]],
+    db_id:gsub("'", "''")
+  )
+
+  local result = db:eval(query)
+  local db_name = result[1].name
+  local db_type = result[1].type
+  local db_path = result[1].path
+  local db_host = result[1].host
+  local db_port = result[1].port
+  local db_database = result[1].database
+  local db_username = result[1].username
+  local db_password = result[1].password
+
+  state.db_data = explorer.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, db_database, db_username, db_password, db_id)
+  state.db_id = db_id  -- add this alongside state.db_path, state.db_type etc.
+  state.db_path = db_path
+  state.db_type = db_type
+  state.is_connected = true
+
+  -- Set default open states
+  --state.open_nodes = { [ db_name ] = true, ['Tables'] = false }
+  -- (You would also fetch real schema data here)
+
+  -- DYNAMIC FIX: Use the actual db_name from the database as the root key
+  state.open_nodes = { 
+    [db_name] = true,   -- Expands the Database root
+    ['Tables'] = false   -- Expands the "Tables" folder automatically if true
+  }
+  state.root_node_id = db_name -- Store this to use in render_explorer_tree
+
+  for _, child_id in ipairs(state.db_data[db_name].children) do
+    if state.db_data[child_id].type == 'folder' then
+      state.open_nodes[child_id] = false
+      -- initialize all tables inside this folder
+      for _, table_id in ipairs(state.db_data[child_id].children) do
+        if state.db_data[table_id] and state.db_data[table_id].type == 'table' then
+          state.open_nodes[table_id] = false
+        end
+      end
+    end
+  end
+
+  explorer.render_explorer_tree(ovr_buf)
+  db:close()
 end
 
 M.delete_db = function()
