@@ -546,13 +546,6 @@ function M.trigger_save_connection()
   local selected_type = get_field_text(2)
   local typed_path = get_field_text(3)
 
-  -- 3. Validation: Check if the file exists at the typed path
-  local file_exists = vim.loop.fs_stat(typed_path)
-  if not file_exists then
-      print("Invalid Path: File does not exist!")
-      return
-  end
-
   local path = state.sys_db
   local f = io.open(path, 'r')
 
@@ -611,6 +604,13 @@ function M.trigger_save_connection()
       end
       db:close()
     else
+      -- 3. Validation: Check if the file exists at the typed path
+      local file_exists = vim.loop.fs_stat(typed_path)
+      if not file_exists then
+          print("Invalid Path: File does not exist!")
+          return
+      end
+      
       local db = require('sqlite.db'):open(path)
       local db_id = M.generate_id()
 
