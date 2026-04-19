@@ -24,7 +24,9 @@ function M.init()
       username TEXT,
       password TEXT
     );
-
+  ]])
+  
+  db:eval([[
     CREATE TABLE IF NOT EXISTS query_history (
       id         TEXT PRIMARY KEY,
       db_id      TEXT NOT NULL,
