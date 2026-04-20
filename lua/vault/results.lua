@@ -295,6 +295,7 @@ function M.edit_cell()
   end
 
   local pk_value = current_set.rows[row_idx][pk_col_idx]
+  print('pk_col:', pk_col, 'pk_col_idx:', pk_col_idx, 'pk_value:', pk_value)
 
   -- Write UPDATE into query buffer and switch focus to it
   local update_sql = string.format(
