@@ -316,6 +316,7 @@ function M.execute_query()
       if result.affected_rows ~= nil then
         -- INSERT/UPDATE/DELETE with no rows returned
         local affected = result.affected_rows or 0
+        print(affected)
         table.insert(state.result_sets, {
           headers = { 'Status' },
           rows = { { string.format('Success — %d row(s) affected', affected) } }
