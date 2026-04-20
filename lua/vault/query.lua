@@ -292,61 +292,30 @@ function M.execute_query()
       end
       total_rows = total_rows + #rows
       table.insert(state.result_sets, { headers = headers, rows = rows })
---    elseif type(result) == 'table' and #result == 0 then
---      -- SELECT returned zero rows — still show the column headers if possible
---      -- Re-run with a LIMIT 0 trick to get column names
---      local headers = {}
---      pcall(function()
---        local col_result = require('sqlite.db').with_open(state.db_path, function(conn)
---          return conn:eval(sql .. ' LIMIT 0')
---        end)
---        if type(col_result) == 'table' then
---          for k in pairs(col_result) do table.insert(headers, k) end
---          table.sort(headers)
---        end
---      end)
---      if #headers == 0 then headers = { 'Result' } end
---      table.insert(state.result_sets, { headers = headers, rows = { { 'Empty' } } })
---    else
---      -- result == true means a non-SELECT DML (INSERT/UPDATE/DELETE)
---      table.insert(state.result_sets, { headers = { 'Status' }, rows = { { 'Success' } } })
---    end
     elseif type(result) == 'table' and #result == 0 then
-      -- Check if it's DML (affected_rows exists) or an empty SELECT
-      if result.affected_rows ~= nil then
-        -- INSERT/UPDATE/DELETE with no rows returned
-        local affected = result.affected_rows or 0
-        print(affected)
-        table.insert(state.result_sets, {
-          headers = { 'Status' },
-          rows = { { string.format('Success — %d row(s) affected', affected) } }
-        })
-      else
-        -- SELECT returned zero rows — get headers from information_schema
-        local headers = {}
-        local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+"?(%w+)"?')
-        if table_name then
-          headers = get_columns(table_name) or {}
+      -- SELECT returned zero rows — still show the column headers if possible
+      -- Re-run with a LIMIT 0 trick to get column names
+      local headers = {}
+      pcall(function()
+        local col_result = require('sqlite.db').with_open(state.db_path, function(conn)
+          return conn:eval(sql .. ' LIMIT 0')
+        end)
+        if type(col_result) == 'table' then
+          for k in pairs(col_result) do table.insert(headers, k) end
+          table.sort(headers)
         end
-        -- Fallback: try LIMIT 0 and read result.fields
-        if #headers == 0 then
-          local col_result = pg:query(sql .. ' LIMIT 0')
-          if col_result and col_result.fields then
-            for _, field in ipairs(col_result.fields) do
-              table.insert(headers, field.name)
-            end
-          end
-        end
-        if #headers == 0 then headers = { 'Result' } end
-        table.insert(state.result_sets, { headers = headers, rows = {} })
-      end
+      end)
+      if #headers == 0 then headers = { 'Result' } end
+      table.insert(state.result_sets, { headers = headers, rows = { { 'Empty' } } })
+    else
+      -- result == true means a non-SELECT DML (INSERT/UPDATE/DELETE)
+      table.insert(state.result_sets, { headers = { 'Status' }, rows = { { 'Success' } } })
     end
   end
 
   local total_ms = (os.clock() - total_start) * 1000
 
   -- Render the first result set immediately
-  print(vim.inspect(state.result_sets))
   results.render_results_table(r_ovr_buf, state.result_sets[1])
 
   -- Build status: "Executed N statements in X ms"
