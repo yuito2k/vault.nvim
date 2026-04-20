@@ -294,6 +294,7 @@ function M.edit_cell()
     return
   end
 
+  print('DEBUG v2')
   local pk_value = current_set.rows[row_idx][pk_col_idx]
   print('pk_col:', pk_col, 'pk_col_idx:', pk_col_idx, 'pk_value:', pk_value)
 
