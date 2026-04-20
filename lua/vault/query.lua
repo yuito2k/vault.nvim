@@ -346,6 +346,7 @@ function M.execute_query()
   local total_ms = (os.clock() - total_start) * 1000
 
   -- Render the first result set immediately
+  print(vim.inspect(state.result_sets))
   results.render_results_table(r_ovr_buf, state.result_sets[1])
 
   -- Build status: "Executed N statements in X ms"
