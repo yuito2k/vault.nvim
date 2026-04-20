@@ -494,32 +494,61 @@ function M.execute_pg_query()
       total_rows = total_rows + #rows
       table.insert(state.result_sets, { headers = headers, rows = rows })
 
+    --elseif type(result) == 'table' and not result[1] then
+    --  -- SELECT returned zero rows — get headers from information_schema
+    --  local headers = {}
+    --  local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+"?(%w+)"?')
+    --  if table_name then
+    --    headers = get_columns(table_name) or {}
+    --  end
+    --  -- Fallback: try LIMIT 0 and read result.fields
+    --  if #headers == 0 then
+    --    local col_result = pg:query(sql .. ' LIMIT 0')
+    --    if col_result and col_result.fields then
+    --      for _, field in ipairs(col_result.fields) do
+    --        table.insert(headers, field.name)
+    --      end
+    --    end
+    --  end
+    --  if #headers == 0 then headers = { 'Result' } end
+    --  table.insert(state.result_sets, { headers = headers, rows = { { 'Success' } } })
+--
+    --else
+    --  -- DML (INSERT/UPDATE/DELETE): pgmoon returns { affected_rows = N }
+    --  local affected = result.affected_rows or 0
+    --  table.insert(state.result_sets, {
+    --    headers = { 'Status' },
+    --    rows = { { string.format('Success — %d row(s) affected', affected) } }
+    --  })
+    --end
     elseif type(result) == 'table' and not result[1] then
-      -- SELECT returned zero rows — get headers from information_schema
-      local headers = {}
-      local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+"?(%w+)"?')
-      if table_name then
-        headers = get_columns(table_name) or {}
-      end
-      -- Fallback: try LIMIT 0 and read result.fields
-      if #headers == 0 then
-        local col_result = pg:query(sql .. ' LIMIT 0')
-        if col_result and col_result.fields then
-          for _, field in ipairs(col_result.fields) do
-            table.insert(headers, field.name)
+      -- Check if it's DML (affected_rows exists) or an empty SELECT
+      if result.affected_rows ~= nil then
+        -- INSERT/UPDATE/DELETE with no rows returned
+        local affected = result.affected_rows or 0
+        table.insert(state.result_sets, {
+          headers = { 'Status' },
+          rows = { { string.format('Success — %d row(s) affected', affected) } }
+        })
+      else
+        -- SELECT returned zero rows — get headers from information_schema
+        local headers = {}
+        local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+"?(%w+)"?')
+        if table_name then
+          headers = get_columns(table_name) or {}
+        end
+        -- Fallback: try LIMIT 0 and read result.fields
+        if #headers == 0 then
+          local col_result = pg:query(sql .. ' LIMIT 0')
+          if col_result and col_result.fields then
+            for _, field in ipairs(col_result.fields) do
+              table.insert(headers, field.name)
+            end
           end
         end
+        if #headers == 0 then headers = { 'Result' } end
+        table.insert(state.result_sets, { headers = headers, rows = {} })
       end
-      if #headers == 0 then headers = { 'Result' } end
-      table.insert(state.result_sets, { headers = headers, rows = { { 'Success' } } })
-
-    else
-      -- DML (INSERT/UPDATE/DELETE): pgmoon returns { affected_rows = N }
-      local affected = result.affected_rows or 0
-      table.insert(state.result_sets, {
-        headers = { 'Status' },
-        rows = { { string.format('Success — %d row(s) affected', affected) } }
-      })
     end
   end
 
