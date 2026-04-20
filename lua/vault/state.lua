@@ -36,6 +36,7 @@ M.state = {
   open_nodes = {}, -- Track state
   root_node_id = nil,
   is_connected = false,
+  pg = nil,
   db_type = nil,
   db_path = nil,
   db_host = nil,

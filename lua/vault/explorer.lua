@@ -167,7 +167,8 @@ function M.fetch_dynamic_pg_data(db_name, db_type, db_host, db_port, database, d
     end
   end
 
-  db:disconnect()
+  --db:disconnect()
+  state.pg = db
   return state.db_data
 end
 

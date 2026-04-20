@@ -424,26 +424,26 @@ function M.execute_pg_query()
   local had_error = false
 
   -- Reuse a single pgmoon connection for all statements in this execution
-  local pgmoon = require('pgmoon')
+--  local pgmoon = require('pgmoon')
+--
+--  local db = pgmoon.new({
+--    host     = state.db_host,
+--    port     = state.db_port or '5432',
+--    database = state.db_database,
+--    user     = state.db_username,
+--    password = state.db_password,
+--  })
+--
+--  assert(db:connect())
 
-  local db = pgmoon.new({
-    host     = state.db_host,
-    port     = state.db_port or '5432',
-    database = state.db_database,
-    user     = state.db_username,
-    password = state.db_password,
-  })
-
-  assert(db:connect())
-
-  if not state.is_connected then
+  if not state.pg then
     results.render_results_table(r_ovr_buf, { headers = { 'Error' }, rows = { { 'No active PostgreSQL connection' } } })
     return
   end
 
   for _, sql in ipairs(statements) do
     local t0 = os.clock()
-    local result, err = db:query(sql)
+    local result, err = state.pg:query(sql)
     local elapsed_ms = (os.clock() - t0) * 1000
 
     if not result then
@@ -462,7 +462,7 @@ function M.execute_pg_query()
       local col_order = {}
       local table_name = sql:match('[Ff][Rr][Oo][Mm]%s+"?(%w+)"?')
       if table_name then
-        local col_result, col_err = db:query(string.format([[
+        local col_result, col_err = state.pg:query(string.format([[
           SELECT column_name, ordinal_position
           FROM information_schema.columns
           WHERE table_schema = 'public'
@@ -499,7 +499,7 @@ function M.execute_pg_query()
       -- SELECT returned zero rows
       -- Re-run with LIMIT 0 to get column names
       local headers = {}
-      local col_result = db:query(sql .. ' LIMIT 0')
+      local col_result = state.pg:query(sql .. ' LIMIT 0')
       if col_result and col_result.fields then
         -- pgmoon exposes column metadata in result.fields for empty results
         for _, field in ipairs(col_result.fields) do
@@ -558,7 +558,7 @@ function M.execute_pg_query()
     end
   end
 
-  db:disconnect()
+  --db:disconnect()
 
   -- Save to history (using the system SQLite db, unchanged)
   if state.is_connected and state.db_id then

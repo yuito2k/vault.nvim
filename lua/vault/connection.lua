@@ -1406,6 +1406,13 @@ M.disconnect_db = function()
 
   if not ovr_buf then return end
 
+  if state.pg then
+    state.pg:disconnect()
+    state.pg = nil
+  else
+    state.pg = nil
+  end
+
   -- 1. Reset Connection States
   state.is_connected = false
   state.root_node_id = nil

@@ -48,6 +48,24 @@ function M.close_all_windows()
     api.nvim_win_close(state.parent_win_id, true)
   end
 
+  if state.pg then
+    state.pg:disconnect()
+    state.pg = nil
+  else
+    state.pg = nil
+  end
+
+  state.root_node_id = nil
+  state.db_path = nil
+  state.db_type = nil
+  state.db_host = nil
+  state.db_port = nil
+  state.db_database = nil
+  state.db_username = nil
+  state.db_password = nil
+  state.db_id = nil
+  state.last_select_sql = nil
+
   state.wins = {}
   state.db_data = {}
   state.is_connected = false
