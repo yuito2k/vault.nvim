@@ -306,7 +306,7 @@ function M.execute_query()
         end
       end)
       if #headers == 0 then headers = { 'Result' } end
-      table.insert(state.result_sets, { headers = headers, rows = {} })
+      table.insert(state.result_sets, { headers = headers, rows = { { 'Empty' } } })
     else
       -- result == true means a non-SELECT DML (INSERT/UPDATE/DELETE)
       table.insert(state.result_sets, { headers = { 'Status' }, rows = { { 'Success' } } })
@@ -423,19 +423,6 @@ function M.execute_pg_query()
   local total_rows = 0
   local had_error = false
 
-  -- Reuse a single pgmoon connection for all statements in this execution
---  local pgmoon = require('pgmoon')
---
---  local db = pgmoon.new({
---    host     = state.db_host,
---    port     = state.db_port or '5432',
---    database = state.db_database,
---    user     = state.db_username,
---    password = state.db_password,
---  })
---
---  assert(db:connect())
-
   if not state.pg then
     results.render_results_table(r_ovr_buf, { headers = { 'Error' }, rows = { { 'No active PostgreSQL connection' } } })
     return
@@ -507,7 +494,7 @@ function M.execute_pg_query()
         end
       end
       if #headers == 0 then headers = { 'Result' } end
-      table.insert(state.result_sets, { headers = headers, rows = {} })
+      table.insert(state.result_sets, { headers = headers, rows = { { 'Empty' } } })
 
     else
       -- DML (INSERT/UPDATE/DELETE): pgmoon returns { affected_rows = N }
@@ -557,8 +544,6 @@ function M.execute_pg_query()
       break
     end
   end
-
-  --db:disconnect()
 
   -- Save to history (using the system SQLite db, unchanged)
   if state.is_connected and state.db_id then
