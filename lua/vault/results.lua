@@ -294,9 +294,13 @@ function M.edit_cell()
     return
   end
 
-  print('DEBUG v2')
   local pk_value = current_set.rows[row_idx][pk_col_idx]
-  print('pk_col:', pk_col, 'pk_col_idx:', pk_col_idx, 'pk_value:', pk_value)
+
+  -- Determine if the PK value needs quotes (strings, UUIDs, etc.)
+  local formatted_pk = tostring(pk_value)
+  if type(pk_value) ~= "number" then
+    formatted_pk = "'" .. formatted_pk:gsub("'", "''") .. "'"
+  end
 
   -- Write UPDATE into query buffer and switch focus to it
   local update_sql = string.format(
@@ -305,7 +309,7 @@ function M.edit_cell()
     col_name,
     cell_value == 'NULL' and '' or cell_value:gsub("'", "''"),
     pk_col,
-    tostring(pk_value):gsub("'", "''")  -- escape any single quotes in the PK value too
+    formatted_pk
   )
 
   for id, name in pairs(state.wins) do
@@ -392,12 +396,18 @@ function M.delete_row()
 
   local pk_value = current_set.rows[row_idx][pk_col_idx]
 
+  -- Determine if the PK value needs quotes (strings, UUIDs, etc.)
+  local formatted_pk = tostring(pk_value)
+  if type(pk_value) ~= "number" then
+    formatted_pk = "'" .. formatted_pk:gsub("'", "''") .. "'"
+  end
+
   -- Build DELETE query
   local delete_sql = string.format(
     "DELETE FROM %s WHERE %s = %s;",
     table_name,
     pk_col,
-    tostring(pk_value):gsub("'", "''")  -- escape any single quotes in the PK value too
+    formatted_pk
   )
 
   -- Write into query buffer
