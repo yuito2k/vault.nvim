@@ -198,6 +198,31 @@ local function get_pk_info(table_name)
   return pk_col
 end
 
+local function get_pg_pk_info(table_name)
+  local pk_col = nil
+  local pg = state.pg
+  if not pg then return nil end
+
+  local result, err = pg:query(string.format([[
+    SELECT kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+     AND tc.table_schema    = kcu.table_schema
+    WHERE tc.constraint_type = 'PRIMARY KEY'
+      AND tc.table_schema    = 'public'
+      AND tc.table_name      = '%s'
+    ORDER BY kcu.ordinal_position
+    LIMIT 1
+  ]], table_name:lower()))
+
+  if result and result[1] then
+    pk_col = result[1].column_name
+  end
+
+  return pk_col
+end
+
 function M.edit_cell()
   local r_ovr_win = nil
   local last_sql = nil
@@ -234,9 +259,14 @@ function M.edit_cell()
 
   local col_name   = current_set.headers[col_idx]
   local cell_value = current_set.rows[row_idx] and current_set.rows[row_idx][col_idx] or ''
+  local pk_col = nil
 
   -- Get PK info
-  local pk_col = get_pk_info(table_name)
+  if state.pg then
+    pk_col = get_pg_pk_info(table_name)
+  else
+    pk_col = get_pk_info(table_name)
+  end
 
   if col_name == pk_col then
     state.last_query_status = 'Cannot edit primary key column'
@@ -330,9 +360,14 @@ function M.delete_row()
 
   local current_set = state.result_sets and state.result_sets[state.result_set_index]
   if not current_set then return end
+  local pk_col = nil
 
   -- Get PK info
-  local pk_col = get_pk_info(table_name)
+  if state.pg then
+    pk_col = get_pg_pk_info(table_name)
+  else
+    pk_col = get_pk_info(table_name)
+  end
 
   if not pk_col then
     state.last_query_status = 'No primary key found on ' .. table_name
