@@ -311,7 +311,7 @@ function M.execute_query()
 --      -- result == true means a non-SELECT DML (INSERT/UPDATE/DELETE)
 --      table.insert(state.result_sets, { headers = { 'Status' }, rows = { { 'Success' } } })
 --    end
-    elseif type(result) == 'table' and not result[1] then
+    elseif type(result) == 'table' and #result == 0 then
       -- Check if it's DML (affected_rows exists) or an empty SELECT
       if result.affected_rows ~= nil then
         -- INSERT/UPDATE/DELETE with no rows returned
