@@ -303,7 +303,7 @@ function M.edit_cell()
     col_name,
     cell_value == 'NULL' and '' or cell_value:gsub("'", "''"),
     pk_col,
-    pk_value
+    pk_value:gsub("'", "''")  -- escape any single quotes in the PK value too
   )
 
   for id, name in pairs(state.wins) do
@@ -395,7 +395,7 @@ function M.delete_row()
     "DELETE FROM %s WHERE %s = %s;",
     table_name,
     pk_col,
-    pk_value
+    pk_value:gsub("'", "''")  -- escape any single quotes in the PK value too
   )
 
   -- Write into query buffer
