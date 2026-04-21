@@ -487,6 +487,8 @@ function M.show_dropdown_picker(field, parent_win)
     zindex = 300,
   })
 
+  api.nvim_win_set_option(picker_win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
+
   -- ADD THESE TWO LINES:
   -- Enable the horizontal highlight bar
   api.nvim_set_option_value('cursorline', true, { win = picker_win })
@@ -1064,6 +1066,7 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
       zindex = 260,
     })
     edit_state.wins[i] = win
+    api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
     local bopts = { buffer = ibuf, silent = true }
 
