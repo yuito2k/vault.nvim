@@ -34,14 +34,14 @@ function M.setup_highlight_groups()
   api.nvim_set_hl(0, 'ExplorerConnector',  { fg = '#6272A4' })
   api.nvim_set_hl(0, 'ExplorerIconDB',     { fg = '#FFB86C', bold = true })
   api.nvim_set_hl(0, 'ExplorerIconOpen',   { fg = '#8BE9FD' })
-  api.nvim_set_hl(0, 'ExplorerIconClosed', { fg = '#BD93F9' })
+  api.nvim_set_hl(0, 'ExplorerIconClosed', { fg = '#c0caf5' })
   api.nvim_set_hl(0, 'ExplorerIconField',  { fg = '#6272A4' })
   api.nvim_set_hl(0, 'ExplorerFolder',     { fg = '#8BE9FD', bold = true })
   api.nvim_set_hl(0, 'ExplorerTable',      { fg = '#F1FA8C' })
   api.nvim_set_hl(0, 'ExplorerField',      { fg = '#6272A4' })
   api.nvim_set_hl(0, 'ExplorerEmpty',      { fg = '#53566b', italic = true })
   -- Explorer tree highlights
-  api.nvim_set_hl(0, 'ExplorerConnectorActive', { fg = '#BD93F9' })  -- add this line
+  api.nvim_set_hl(0, 'ExplorerConnectorActive', { fg = '#8BE9FD' })  -- add this line
   api.nvim_set_hl(0, 'ExplorerFieldName', { fg = '#F8F8F2', bold = true })
   api.nvim_set_hl(0, 'ExplorerFieldType', { fg = '#6272A4', italic = true })
 end
