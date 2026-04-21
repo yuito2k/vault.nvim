@@ -44,6 +44,8 @@ function M.setup_highlight_groups()
   api.nvim_set_hl(0, 'ExplorerConnectorActive', { fg = '#8BE9FD' })  -- add this line
   api.nvim_set_hl(0, 'ExplorerFieldName', { fg = '#F8F8F2', bold = true })
   api.nvim_set_hl(0, 'ExplorerFieldType', { fg = '#6272A4', italic = true })
+  -- Connection render highlights
+  api.nvim_set_hl(0, 'ConnectionMenuBorder', { fg = '#8BE9FD' })
 end
 
 return M

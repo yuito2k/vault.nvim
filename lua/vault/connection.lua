@@ -45,7 +45,7 @@ function update_focus()
     for i, win in ipairs(conn_state.pg_wins) do
       if i == conn_state.active_idx then
         -- Active: Bright Border/Text
-        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
         api.nvim_set_current_win(win)
       else
         -- Inactive: Dimmed (Comment color usually works well for dimming)
@@ -56,7 +56,7 @@ function update_focus()
     for i, win in ipairs(conn_state.mysql_wins) do
       if i == conn_state.active_idx then
         -- Active: Bright Border/Text
-        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
         api.nvim_set_current_win(win)
       else
         -- Inactive: Dimmed (Comment color usually works well for dimming)
@@ -67,7 +67,7 @@ function update_focus()
     for i, win in ipairs(conn_state.wins) do
       if i == conn_state.active_idx then
         -- Active: Bright Border/Text
-        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
         api.nvim_set_current_win(win)
       else
         -- Inactive: Dimmed (Comment color usually works well for dimming)
@@ -122,6 +122,7 @@ local function show_pg_fields(main_win, ibuf_list)
 
     -- hint text styling
     vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+    api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
     local bopts = { buffer = ibuf, silent = true }
 
@@ -229,6 +230,7 @@ local function show_mysql_fields(main_win, ibuf_list)
 
     -- hint text styling
     vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+    api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
     local bopts = { buffer = ibuf, silent = true }
 
@@ -337,6 +339,7 @@ local function show_sql_fields(main_win, ibuf_list)
       zindex = 260,
     })
     conn_state.wins[i] = win
+    api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
     -- Set common keymaps for every field buffer
     local opts = { buffer = ibuf, silent = true }
@@ -749,7 +752,7 @@ function M.render_connection_ui()
   })
 
   -- Apply the custom background to this specific window
-  api.nvim_set_option_value('winhl', 'Normal:MyCustomWinBG,FloatBorder:FloatBorder', { win = conn_state.main_win })
+  api.nvim_set_option_value('winhl', 'Normal:MyCustomWinBG,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive', { win = conn_state.main_win })
 
   -- 1. Draw Static Background (the boxes and labels)
   local lines = {
@@ -929,7 +932,7 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
     zindex = 250,
   })
 
-  api.nvim_set_option_value('winhl', 'Normal:MyCustomWinBG,FloatBorder:FloatBorder', { win = edit_state.main_win })
+  api.nvim_set_option_value('winhl', 'Normal:MyCustomWinBG,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive', { win = edit_state.main_win })
 
   local lines = {
     '',
