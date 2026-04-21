@@ -487,13 +487,11 @@ function M.show_dropdown_picker(field, parent_win)
     zindex = 300,
   })
 
-  api.nvim_win_set_option(picker_win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
-
   -- ADD THESE TWO LINES:
   -- Enable the horizontal highlight bar
   api.nvim_set_option_value('cursorline', true, { win = picker_win })
   -- Optional: Link the highlight to a specific group like 'Visual' or 'PmenuSel'
-  api.nvim_set_option_value('winhl', 'CursorLine:Visual', { win = picker_win })
+  api.nvim_set_option_value('winhl', 'CursorLine:Visual,Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive', { win = picker_win })
 
   vim.keymap.set('n', '<CR>', function()
     local line = api.nvim_get_current_line()
