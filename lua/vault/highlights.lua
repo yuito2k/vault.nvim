@@ -23,7 +23,7 @@ function M.setup_highlight_groups()
   api.nvim_set_hl(0, 'ExplorerLineActiveBG', { bg = '#3d4555' })
   -- text colour for the label part only
   api.nvim_set_hl(0, 'ExplorerLineActive', { fg = '#F1FA8C', bg = '#44475A', bold = true }) -- Active line text color
-  api.nvim_set_hl(0, 'ExplorerLineInactive', { fg = '#BD93F9', bg = 'NONE' }) -- Inactive line text color
+  api.nvim_set_hl(0, 'ExplorerLineInactive', { fg = '#ffb86c', bg = 'NONE' }) -- Inactive line text color
   -- Define soft red for labels
   api.nvim_set_hl(0, 'SoftRedLabel', { fg = '#e06c75' })
   -- Define soft orange for keys/actions
