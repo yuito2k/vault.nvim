@@ -954,7 +954,7 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
   local function update_edit_focus()
     for i, win in ipairs(edit_state.wins) do
       if i == edit_state.active_idx then
-        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:FloatBorder')
+        api.nvim_win_set_option(win, 'winhl', 'Normal:NormalFloat,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
         api.nvim_set_current_win(win)
       else
         api.nvim_win_set_option(win, 'winhl', 'Normal:Comment,FloatBorder:Comment')
