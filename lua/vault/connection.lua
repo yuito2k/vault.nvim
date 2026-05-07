@@ -1259,8 +1259,16 @@ function M.render_edit_connection_ui(db_id, record)
 
       local bopts = { buffer = ibuf, silent = true }
 
+      --vim.keymap.set('n', '<Tab>', function()
+      --  edit_state.active_idx = (edit_state.active_idx % #edit_state.pg_fields) + 1
+      --  update_edit_focus()
+      --end, bopts)
+
       vim.keymap.set('n', '<Tab>', function()
-        edit_state.active_idx = (edit_state.active_idx % #edit_state.pg_fields) + 1
+        -- Tab cycles through pg fields
+        edit_state.active_idx = (edit_state.active_idx % 
+          (#edit_state.pg_fields)) + 1
+        
         update_edit_focus()
       end, bopts)
 
