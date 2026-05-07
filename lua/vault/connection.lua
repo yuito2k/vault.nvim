@@ -1215,8 +1215,8 @@ function M.render_edit_connection_ui(db_id, record)
           }
         elseif field.type == 'dropdown' then
           M.show_dropdown_picker(field, edit_state.wins[i])
-        else
-          vim.cmd 'startinsert!'
+        --else
+          --vim.cmd 'startinsert!'
         end
       end, bopts)
 
@@ -1260,51 +1260,45 @@ function M.render_edit_connection_ui(db_id, record)
       local bopts = { buffer = ibuf, silent = true }
 
       vim.keymap.set('n', '<Tab>', function()
-        -- Tab cycles through pg fields
-        edit_state.active_idx = (edit_state.active_idx % 
-          (#edit_state.pg_fields)) + 1
+        edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
+        update_edit_focus()
+      end, bopts)
 
-        update_focus()
+      vim.keymap.set('n', 's', function()
+        trigger_update_connection()
+        edit_state.pg_wins    = {}
+        edit_state.mysql_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
       end, bopts)
 
       vim.keymap.set('n', '<CR>', function()
         if field.type == 'dropdown' then
           -- Trigger the new picker function
           M.show_dropdown_picker(field, edit_state.pg_wins[i])
-        else
-          vim.cmd 'startinsert!'
+        --else
+        --  vim.cmd 'startinsert!'
         end
       end, bopts)
 
-      vim.keymap.set('n', 's', function()
-        M.trigger_save_connection()
-        edit_state.pg_wins    = {}
-        edit_state.mysql_wins    = {}
-        edit_state.wins = {}
-        edit_state.main_win = nil
-      end, bopts)
-
       vim.keymap.set('n', '<Esc>', function()
-        for _, w in ipairs(edit_state.wins) do
-          if vim.api.nvim_win_is_valid(w) then
-            vim.api.nvim_win_close(w, true)
-          end
+        for _, win in ipairs(edit_state.wins) do
+          api.nvim_win_close(win, true)
         end
         for _, w in ipairs(edit_state.pg_wins) do
           if vim.api.nvim_win_is_valid(w) then
             vim.api.nvim_win_close(w, true)
           end
         end
-        vim.api.nvim_win_close(edit_state.main_win, true)
+        api.nvim_win_close(edit_state.main_win, true)
 
         edit_state.pg_wins    = {}
         edit_state.mysql_wins    = {}
         edit_state.wins = {}
         edit_state.main_win = nil
-
         for id, name in pairs(state.wins) do
-          if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
-            vim.api.nvim_set_current_win(id)
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
             return
           end
         end
