@@ -937,6 +937,8 @@ function M.render_edit_connection_ui(db_id, record)
     main_win = nil,
   }
 
+  print(vim.inspect(edit_state))
+
   edit_state.main_win = api.nvim_open_win(buf, true, {
     relative = 'win',
     row = row - 5,
