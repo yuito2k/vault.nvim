@@ -909,13 +909,13 @@ function M.render_edit_connection_ui(db_id, record)
     active_idx = 1,
     fields = {
       { name = ' Database Name ', value = record.name, type = 'input',    row = 4,  col = 6, width = 75 },
-      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8,  col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' } },
+      { name = ' Database Type ', value = record.type, type = 'dropdown', row = 8,  col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' } },
       { name = ' Database Path ', value = record.path, type = 'input',    row = 12, col = 6, width = 70 },
       { name = 'Browser',         value = '...', type = 'button',          row = 12, col = 78, width = 3 },
     },
     pg_fields = {
       { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
-      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+      { name = ' Database Type ', value = record.type, type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
       { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
       { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
       { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
@@ -924,7 +924,7 @@ function M.render_edit_connection_ui(db_id, record)
     },
     mysql_fields = {
       { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
-      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+      { name = ' Database Type ', value = record.type, type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
       { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
       { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
       { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
@@ -936,8 +936,6 @@ function M.render_edit_connection_ui(db_id, record)
     wins = {},
     main_win = nil,
   }
-
-  print(vim.inspect(edit_state))
 
   edit_state.main_win = api.nvim_open_win(buf, true, {
     relative = 'win',
@@ -1347,6 +1345,7 @@ M.edit_db = function()
   end
 
   local row = result[1]
+  print(vim.inspect(row))
   M.render_edit_connection_ui(node_id, row)
 end
 
