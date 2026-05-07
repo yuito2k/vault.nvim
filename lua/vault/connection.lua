@@ -995,7 +995,7 @@ function M.render_edit_connection_ui(db_id, record)
     end
 
     local function get_pg_field_text(index)
-      local win = edit_state.pg_wins[index]
+      local win = edit_state.wins[index]
       if win and vim.api.nvim_win_is_valid(win) then
         local buf   = vim.api.nvim_win_get_buf(win)
         local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
