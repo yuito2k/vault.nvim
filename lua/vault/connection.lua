@@ -1239,45 +1239,30 @@ function M.render_edit_connection_ui(db_id, record)
       local ibuf = api.nvim_create_buf(false, true)
       api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-      local win = vim.api.nvim_open_win(ibuf, false, {
+      local win = api.nvim_open_win(ibuf, false, {
         relative = 'win',
-        win      = edit_state.main_win,
-        row      = field.row,
-        col      = field.col - 5,
-        width    = field.width,
-        height   = 1,
-        title    = field.name,
-        style    = 'minimal',
-        border   = 'rounded',
-        zindex   = 260,
+        win = edit_state.main_win,
+        row = field.row,
+        col = field.col - 5,
+        width = field.width,
+        height = 1,
+        title = field.name ~= 'Browser' and field.name or nil,
+        style = 'minimal',
+        border = 'rounded',
+        zindex = 260,
       })
-      edit_state.pg_wins[i] = win
-
-      -- hint text styling
-      vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+      edit_state.wins[i] = win
       api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
       local bopts = { buffer = ibuf, silent = true }
 
-      --vim.keymap.set('n', '<Tab>', function()
-      --  edit_state.active_idx = (edit_state.active_idx % #edit_state.pg_fields) + 1
-      --  update_edit_focus()
-      --end, bopts)
-
       vim.keymap.set('n', '<Tab>', function()
-        -- Tab cycles through pg fields
-        edit_state.active_idx = (edit_state.active_idx % 
-          (#edit_state.pg_fields)) + 1
-        
+        edit_state.active_idx = (edit_state.active_idx % #edit_state.pg_fields) + 1
         update_edit_focus()
       end, bopts)
 
       vim.keymap.set('n', 's', function()
         trigger_update_connection()
-        edit_state.pg_wins    = {}
-        edit_state.mysql_wins    = {}
-        edit_state.wins = {}
-        edit_state.main_win = nil
       end, bopts)
 
       vim.keymap.set('n', '<CR>', function()
