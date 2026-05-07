@@ -917,7 +917,7 @@ function M.render_edit_connection_ui(db_id, record)
       { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
       { name = ' Database Type ', value = record.type, type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
       { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
-      { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
+      { name = ' Port ',     value = 'record.port',      type = 'input', row = 12, col = 59, width = 22 },
       { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
       { name = ' Username ', value = record.username,  type = 'input', row = 20, col = 6,  width = 35 },
       { name = ' Password ', value = record.password,          type = 'input', row = 20, col = 44, width = 37 },
@@ -926,7 +926,7 @@ function M.render_edit_connection_ui(db_id, record)
       { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
       { name = ' Database Type ', value = record.type, type = 'dropdown', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
       { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
-      { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
+      { name = ' Port ',     value = 'record.port',      type = 'input', row = 12, col = 59, width = 22 },
       { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
       { name = ' Username ', value = record.username,  type = 'input', row = 20, col = 6,  width = 35 },
       { name = ' Password ', value = record.password,          type = 'input', row = 20, col = 44, width = 37 },
@@ -1237,7 +1237,7 @@ function M.render_edit_connection_ui(db_id, record)
   elseif record.type == 'PostgreSQL' then
     for i, field in ipairs(edit_state.pg_fields) do
       local ibuf = api.nvim_create_buf(false, true)
-      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value.tostring })
+      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
       local win = api.nvim_open_win(ibuf, false, {
         relative = 'win',
