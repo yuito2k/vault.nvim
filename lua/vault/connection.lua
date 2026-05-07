@@ -1100,7 +1100,7 @@ function M.render_edit_connection_ui(db_id, record)
         port:gsub("'","''"),
         database:gsub("'","''"),
         username:gsub("'","''"),
-        password:gsub("'","''")
+        password:gsub("'","''"),
         db_id:gsub("'", "''")
       )
 
