@@ -891,7 +891,7 @@ function M.render_connection_ui()
   update_focus()
 end
 
-function M.render_edit_connection_ui(db_id, current_name, current_type, current_path)
+function M.render_edit_connection_ui(db_id, record)
   -- Focus overlay first (same pattern as render_connection_ui)
   for id, name in pairs(state.wins) do
     if name == 'overlay' and api.nvim_win_is_valid(id) then
@@ -908,11 +908,31 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
   local edit_state = {
     active_idx = 1,
     fields = {
-      { name = ' Database Name ', value = current_name, type = 'input',    row = 4,  col = 6, width = 75 },
-      { name = ' Database Type ', value = current_type, type = 'dropdown', row = 8,  col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' } },
-      { name = ' Database Path ', value = current_path, type = 'input',    row = 12, col = 6, width = 70 },
+      { name = ' Database Name ', value = record.name, type = 'input',    row = 4,  col = 6, width = 75 },
+      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8,  col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB' } },
+      { name = ' Database Path ', value = record.path, type = 'input',    row = 12, col = 6, width = 70 },
       { name = 'Browser',         value = '...', type = 'button',          row = 12, col = 78, width = 3 },
     },
+    pg_fields = {
+      { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
+      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+      { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
+      { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
+      { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
+      { name = ' Username ', value = record.username,  type = 'input', row = 20, col = 6,  width = 35 },
+      { name = ' Password ', value = record.password,          type = 'input', row = 20, col = 44, width = 37 },
+    },
+    mysql_fields = {
+      { name = ' Database Name ', value = record.name, type = 'input', row = 4, col = 6, width = 75 },
+      { name = ' Database Type ', value = record.type, type = 'dropdown_disabled', row = 8, col = 6, width = 75, options = { 'SQLite', 'PostgreSQL', 'MySQL', 'OracleDB', 'MongoDB', 'MariaDB'} },
+      { name = ' Server/Host ',   value = record.host, type = 'input', row = 12, col = 6,  width = 50 },
+      { name = ' Port ',     value = record.port,      type = 'input', row = 12, col = 59, width = 22 },
+      { name = ' Database ', value = record.database,          type = 'input', row = 16, col = 6,  width = 75 },
+      { name = ' Username ', value = record.username,  type = 'input', row = 20, col = 6,  width = 35 },
+      { name = ' Password ', value = record.password,          type = 'input', row = 20, col = 44, width = 37 },
+    },
+    pg_wins    = {},
+    mysql_wins    = {},
     wins = {},
     main_win = nil,
   }
@@ -974,14 +994,14 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
       return ''
     end
 
-    local typed_name = get_field_text(1)
-    local selected_type = get_field_text(2)
-    local typed_path = get_field_text(3)
-
-    -- Validate path
-    if not vim.loop.fs_stat(typed_path) then
-      print('Invalid Path: File does not exist!')
-      return
+    local function get_pg_field_text(index)
+      local win = edit_state.pg_wins[index]
+      if win and vim.api.nvim_win_is_valid(win) then
+        local buf   = vim.api.nvim_win_get_buf(win)
+        local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+        return lines[1] or ''
+      end
+      return ''
     end
 
     local path = state.sys_db
@@ -989,141 +1009,307 @@ function M.render_edit_connection_ui(db_id, current_name, current_type, current_
     if not f then return end
     f:close()
 
-    local db = require('sqlite.db'):open(path)
-    local update_query = string.format(
-      [[UPDATE database SET name='%s', type='%s', path='%s' WHERE id='%s';]],
-      typed_name:gsub("'", "''"),
-      selected_type:gsub("'", "''"),
-      typed_path:gsub("'", "''"),
-      db_id:gsub("'", "''")
-    )
+    if record.type == 'SQLite' then
+      local typed_name = get_field_text(1)
+      local selected_type = get_field_text(2)
+      local typed_path = get_field_text(3)
 
-    local success, err = pcall(function()
-      db:eval(update_query)
-    end)
+      -- Validate path
+      if not vim.loop.fs_stat(typed_path) then
+        print('Invalid Path: File does not exist!')
+        return
+      end
 
-    if success then
-      -- Refresh the overlay list
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' then
-          local ovr_buf = vim.api.nvim_win_get_buf(id)
-          api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
-          api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
-          -- Rebuild entire list from DB to reflect the rename
-          api.nvim_buf_set_lines(ovr_buf, 0, -1, false, {})
-          local result = db:eval('SELECT * FROM database')
-          if type(result) == 'table' then
-            for i, row in ipairs(result) do
-              local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
-              if i == 1 then
-                vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
-              else
-                vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+      local db = require('sqlite.db'):open(path)
+      local update_query = string.format(
+        [[UPDATE database SET name='%s', path='%s' WHERE id='%s';]],
+        typed_name:gsub("'", "''"),
+        typed_path:gsub("'", "''"),
+        db_id:gsub("'", "''")
+      )
+
+      local success, err = pcall(function()
+        db:eval(update_query)
+      end)
+
+      if success then
+        -- Refresh the overlay list
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' then
+            local ovr_buf = vim.api.nvim_win_get_buf(id)
+            api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+            api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+            -- Rebuild entire list from DB to reflect the rename
+            api.nvim_buf_set_lines(ovr_buf, 0, -1, false, {})
+            local result = db:eval('SELECT * FROM database')
+            if type(result) == 'table' then
+              for i, row in ipairs(result) do
+                local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+                if i == 1 then
+                  vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+                else
+                  vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+                end
               end
             end
+            api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+            break
           end
-          api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
-          break
         end
+
+        -- Close edit popup windows
+        for _, win in ipairs(edit_state.wins) do
+          api.nvim_win_close(win, true)
+        end
+        api.nvim_win_close(edit_state.main_win, true)
+
+        -- Return focus to overlay
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
+          end
+        end
+      else
+        print('Database Error: ' .. tostring(err))
       end
 
-      -- Close edit popup windows
-      for _, win in ipairs(edit_state.wins) do
-        api.nvim_win_close(win, true)
-      end
-      api.nvim_win_close(edit_state.main_win, true)
+      db:close()
 
-      -- Return focus to overlay
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and api.nvim_win_is_valid(id) then
-          api.nvim_set_current_win(id)
+    else if record.type == 'PostgreSQL' then
+      local db_name  = get_pg_field_text(1)
+      local db_type  = get_pg_field_text(2)
+      local server   = get_pg_field_text(3)
+      local port     = get_pg_field_text(4)
+      local database = get_pg_field_text(5)
+      local username = get_pg_field_text(6)
+      local password = get_pg_field_text(7)
+
+      -- Build connection string as the "path"
+      local conn_str = string.format(
+        '%s://%s:%s@%s:%s/%s',
+        db_type:lower(),
+        username, password, server, port, database
+      )
+
+      local db = require('sqlite.db'):open(path)
+      local update_query = string.format(
+        [[UPDATE database SET name='%s', path='%s', host='%s', port='%s', database='%s', username='%s', password='%s' WHERE id='%s';]],
+        db_name:gsub("'","''"),
+        conn_str:gsub("'","''"),
+        server:gsub("'","''"),
+        port:gsub("'","''"),
+        database:gsub("'","''"),
+        username:gsub("'","''"),
+        password:gsub("'","''")
+        db_id:gsub("'", "''")
+      )
+
+      local success, err = pcall(function()
+        db:eval(update_query)
+      end)
+
+      if success then
+        -- Refresh the overlay list
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' then
+            local ovr_buf = vim.api.nvim_win_get_buf(id)
+            api.nvim_buf_set_option(ovr_buf, 'buftype', 'nofile')
+            api.nvim_buf_set_option(ovr_buf, 'modifiable', true)
+            -- Rebuild entire list from DB to reflect the rename
+            api.nvim_buf_set_lines(ovr_buf, 0, -1, false, {})
+            local result = db:eval('SELECT * FROM database')
+            if type(result) == 'table' then
+              for i, row in ipairs(result) do
+                local line_content = '  ' .. row.name .. ' [' .. row.type .. '] ' .. '--ID:' .. row.id
+                if i == 1 then
+                  vim.api.nvim_buf_set_lines(ovr_buf, 0, 1, false, { line_content })
+                else
+                  vim.api.nvim_buf_set_lines(ovr_buf, -1, -1, false, { line_content })
+                end
+              end
+            end
+            api.nvim_buf_set_option(ovr_buf, 'modifiable', false)
+            break
+          end
         end
+
+        -- Close edit popup windows
+        for _, win in ipairs(edit_state.wins) do
+          api.nvim_win_close(win, true)
+        end
+        api.nvim_win_close(edit_state.main_win, true)
+
+        -- Return focus to overlay
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
+          end
+        end
+      else
+        print('Database Error: ' .. tostring(err))
       end
-    else
-      print('Database Error: ' .. tostring(err))
+
+      db:close()
     end
-
-    db:close()
   end
 
   -- Create field windows (same layout as render_connection_ui)
-  for i, field in ipairs(edit_state.fields) do
-    local ibuf = api.nvim_create_buf(false, true)
-    api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+  if record.type == 'SQLite' then
+    for i, field in ipairs(edit_state.fields) do
+      local ibuf = api.nvim_create_buf(false, true)
+      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
 
-    local win = api.nvim_open_win(ibuf, false, {
-      relative = 'win',
-      win = edit_state.main_win,
-      row = field.row,
-      col = field.col - 5,
-      width = field.width,
-      height = 1,
-      title = field.name ~= 'Browser' and field.name or nil,
-      style = 'minimal',
-      border = 'rounded',
-      zindex = 260,
-    })
-    edit_state.wins[i] = win
-    api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
+      local win = api.nvim_open_win(ibuf, false, {
+        relative = 'win',
+        win = edit_state.main_win,
+        row = field.row,
+        col = field.col - 5,
+        width = field.width,
+        height = 1,
+        title = field.name ~= 'Browser' and field.name or nil,
+        style = 'minimal',
+        border = 'rounded',
+        zindex = 260,
+      })
+      edit_state.wins[i] = win
+      api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
 
-    local bopts = { buffer = ibuf, silent = true }
+      local bopts = { buffer = ibuf, silent = true }
 
-    vim.keymap.set('n', '<Tab>', function()
-      edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
-      update_edit_focus()
-    end, bopts)
+      vim.keymap.set('n', '<Tab>', function()
+        edit_state.active_idx = (edit_state.active_idx % #edit_state.fields) + 1
+        update_edit_focus()
+      end, bopts)
 
-    vim.keymap.set('n', 's', function()
-      trigger_update_connection()
-    end, bopts)
+      vim.keymap.set('n', 's', function()
+        trigger_update_connection()
+      end, bopts)
 
-    vim.keymap.set('n', '<CR>', function()
-      if field.type == 'button' then
-        local path_field = edit_state.fields[i - 1]
-        local field_win = edit_state.wins[i - 1]
-        local field_buf = api.nvim_win_get_buf(field_win)
-        require('telescope').extensions.file_browser.file_browser {
-          cwd = vim.fn.expand '$HOME',
-          prompt_title = 'Select Database File',
-          attach_mappings = function(prompt_bufnr, _)
-            vim.schedule(function()
-              local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
-              for _, win_key in ipairs { 'prompt_win', 'results_win', 'preview_win' } do
-                if picker[win_key] and api.nvim_win_is_valid(picker[win_key]) then
-                  api.nvim_win_set_config(picker[win_key], { border = 'rounded', zindex = 400 })
+      vim.keymap.set('n', '<CR>', function()
+        if field.type == 'button' then
+          local path_field = edit_state.fields[i - 1]
+          local field_win = edit_state.wins[i - 1]
+          local field_buf = api.nvim_win_get_buf(field_win)
+          require('telescope').extensions.file_browser.file_browser {
+            cwd = vim.fn.expand '$HOME',
+            prompt_title = 'Select Database File',
+            attach_mappings = function(prompt_bufnr, _)
+              vim.schedule(function()
+                local picker = require('telescope.actions.state').get_current_picker(prompt_bufnr)
+                for _, win_key in ipairs { 'prompt_win', 'results_win', 'preview_win' } do
+                  if picker[win_key] and api.nvim_win_is_valid(picker[win_key]) then
+                    api.nvim_win_set_config(picker[win_key], { border = 'rounded', zindex = 400 })
+                  end
                 end
-              end
-            end)
-            local actions = require 'telescope.actions'
-            local action_state = require 'telescope.actions.state'
-            actions.select_default:replace(function()
-              local selection = action_state.get_selected_entry()
-              actions.close(prompt_bufnr)
-              path_field.value = selection.path
-              api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
-            end)
-            return true
-          end,
-        }
-      elseif field.type == 'dropdown' then
-        M.show_dropdown_picker(field, edit_state.wins[i])
-      else
-        vim.cmd 'startinsert!'
-      end
-    end, bopts)
-
-    vim.keymap.set('n', '<Esc>', function()
-      for _, win in ipairs(edit_state.wins) do
-        api.nvim_win_close(win, true)
-      end
-      api.nvim_win_close(edit_state.main_win, true)
-      for id, name in pairs(state.wins) do
-        if name == 'overlay' and api.nvim_win_is_valid(id) then
-          api.nvim_set_current_win(id)
-          return
+              end)
+              local actions = require 'telescope.actions'
+              local action_state = require 'telescope.actions.state'
+              actions.select_default:replace(function()
+                local selection = action_state.get_selected_entry()
+                actions.close(prompt_bufnr)
+                path_field.value = selection.path
+                api.nvim_buf_set_lines(field_buf, 0, -1, false, { selection.path })
+              end)
+              return true
+            end,
+          }
+        elseif field.type == 'dropdown' then
+          M.show_dropdown_picker(field, edit_state.wins[i])
+        else
+          vim.cmd 'startinsert!'
         end
-      end
-    end, bopts)
+      end, bopts)
+
+      vim.keymap.set('n', '<Esc>', function()
+        for _, win in ipairs(edit_state.wins) do
+          api.nvim_win_close(win, true)
+        end
+        api.nvim_win_close(edit_state.main_win, true)
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and api.nvim_win_is_valid(id) then
+            api.nvim_set_current_win(id)
+            return
+          end
+        end
+      end, bopts)
+    end
+
+  else if record.type == 'PostgreSQL' then
+    for i, field in ipairs(edit_state.pg_fields) do
+      local ibuf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+
+      local win = vim.api.nvim_open_win(ibuf, true, {
+        relative = 'win',
+        win      = main_win,
+        row      = field.row,
+        col      = field.col - 5,
+        width    = field.width,
+        height   = 1,
+        title    = field.name,
+        style    = 'minimal',
+        border   = 'rounded',
+        zindex   = 260,
+      })
+      edit_state.pg_wins[i] = win
+
+      -- hint text styling
+      vim.api.nvim_set_hl(0, 'PgFieldHint', { fg = '#6272A4', italic = true })
+      api.nvim_win_set_option(win, 'winhl', 'Normal:Normal,FloatBorder:ConnectionMenuBorder,FloatTitle:FloatTitleActive')
+
+      local bopts = { buffer = ibuf, silent = true }
+
+      vim.keymap.set('n', '<Tab>', function()
+        -- Tab cycles through pg fields
+        edit_state.active_idx = (edit_state.active_idx % 
+          (#edit_state.pg_fields)) + 1
+
+        update_focus()
+      end, bopts)
+
+      vim.keymap.set('n', '<CR>', function()
+        if field.type == 'dropdown' then
+          -- Trigger the new picker function
+          M.show_dropdown_picker(field, edit_state.pg_wins[i])
+        else
+          vim.cmd 'startinsert!'
+        end
+      end, bopts)
+
+      vim.keymap.set('n', 's', function()
+        M.trigger_save_connection()
+        edit_state.pg_wins    = {}
+        edit_state.mysql_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
+      end, bopts)
+
+      vim.keymap.set('n', '<Esc>', function()
+        for _, w in ipairs(edit_state.wins) do
+          if vim.api.nvim_win_is_valid(w) then
+            vim.api.nvim_win_close(w, true)
+          end
+        end
+        for _, w in ipairs(edit_state.pg_wins) do
+          if vim.api.nvim_win_is_valid(w) then
+            vim.api.nvim_win_close(w, true)
+          end
+        end
+        vim.api.nvim_win_close(edit_state.main_win, true)
+
+        edit_state.pg_wins    = {}
+        edit_state.mysql_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
+
+        for id, name in pairs(state.wins) do
+          if name == 'overlay' and vim.api.nvim_win_is_valid(id) then
+            vim.api.nvim_set_current_win(id)
+            return
+          end
+        end
+      end, bopts)
+    end
   end
 
   update_edit_focus()
@@ -1167,7 +1353,7 @@ M.edit_db = function()
   end
 
   local row = result[1]
-  M.render_edit_connection_ui(node_id, row.name, row.type, row.path)
+  M.render_edit_connection_ui(node_id, row)
 end
 
 -- Add a function you can call externally when a connection is made
