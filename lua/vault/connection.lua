@@ -1075,7 +1075,7 @@ function M.render_edit_connection_ui(db_id, record)
 
       db:close()
 
-    else if record.type == 'PostgreSQL' then
+    elseif record.type == 'PostgreSQL' then
       local db_name  = get_pg_field_text(1)
       local db_type  = get_pg_field_text(2)
       local server   = get_pg_field_text(3)
@@ -1234,7 +1234,7 @@ function M.render_edit_connection_ui(db_id, record)
       end, bopts)
     end
 
-  else if record.type == 'PostgreSQL' then
+  elseif record.type == 'PostgreSQL' then
     for i, field in ipairs(edit_state.pg_fields) do
       local ibuf = vim.api.nvim_create_buf(false, true)
       vim.api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
