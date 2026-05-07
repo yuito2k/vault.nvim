@@ -1241,7 +1241,7 @@ function M.render_edit_connection_ui(db_id, record)
 
       local win = vim.api.nvim_open_win(ibuf, true, {
         relative = 'win',
-        win      = main_win,
+        win      = edit_state.main_win,
         row      = field.row,
         col      = field.col - 5,
         width    = field.width,
