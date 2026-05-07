@@ -1214,9 +1214,9 @@ function M.render_edit_connection_ui(db_id, record)
             end,
           }
         elseif field.type == 'dropdown' then
-          M.show_dropdown_picker(field, edit_state.wins[i])
-        --else
-          --vim.cmd 'startinsert!'
+          --M.show_dropdown_picker(field, edit_state.wins[i])
+        else
+          vim.cmd 'startinsert!'
         end
       end, bopts)
 
@@ -1238,6 +1238,7 @@ function M.render_edit_connection_ui(db_id, record)
     for i, field in ipairs(edit_state.pg_fields) do
       local ibuf = api.nvim_create_buf(false, true)
       api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+      print(field.value)
 
       local win = api.nvim_open_win(ibuf, false, {
         relative = 'win',
@@ -1263,14 +1264,18 @@ function M.render_edit_connection_ui(db_id, record)
 
       vim.keymap.set('n', 's', function()
         trigger_update_connection()
+        edit_state.pg_wins    = {}
+        edit_state.mysql_wins    = {}
+        edit_state.wins = {}
+        edit_state.main_win = nil
       end, bopts)
 
       vim.keymap.set('n', '<CR>', function()
         if field.type == 'dropdown' then
           -- Trigger the new picker function
-          M.show_dropdown_picker(field, edit_state.pg_wins[i])
-        --else
-        --  vim.cmd 'startinsert!'
+          --M.show_dropdown_picker(field, edit_state.pg_wins[i])
+        else
+          vim.cmd 'startinsert!'
         end
       end, bopts)
 
