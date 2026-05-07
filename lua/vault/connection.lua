@@ -1238,7 +1238,6 @@ function M.render_edit_connection_ui(db_id, record)
     for i, field in ipairs(edit_state.pg_fields) do
       local ibuf = api.nvim_create_buf(false, true)
       api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
-      print(field.value)
 
       local win = api.nvim_open_win(ibuf, false, {
         relative = 'win',
@@ -1335,7 +1334,7 @@ M.edit_db = function()
 
   local db = require('sqlite.db'):open(path)
   local result = db:eval(
-    string.format("SELECT name, type, path FROM database WHERE id = '%s';", node_id:gsub("'", "''"))
+    string.format("SELECT * FROM database WHERE id = '%s';", node_id:gsub("'", "''"))
   )
   db:close()
 
@@ -1345,7 +1344,6 @@ M.edit_db = function()
   end
 
   local row = result[1]
-  print(vim.inspect(row))
   M.render_edit_connection_ui(node_id, row)
 end
 
