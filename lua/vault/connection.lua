@@ -1237,7 +1237,7 @@ function M.render_edit_connection_ui(db_id, record)
   elseif record.type == 'PostgreSQL' then
     for i, field in ipairs(edit_state.pg_fields) do
       local ibuf = api.nvim_create_buf(false, true)
-      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value })
+      api.nvim_buf_set_lines(ibuf, 0, -1, false, { field.value.tostring })
 
       local win = api.nvim_open_win(ibuf, false, {
         relative = 'win',
